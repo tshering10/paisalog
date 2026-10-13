@@ -1,0 +1,36 @@
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: paisalog_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://paisalog:paisalog@postgres:5432/paisalog
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    container_name: paisalog_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-paisalog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paisalog}
+      POSTGRES_DB: ${POSTGRES_DB:-paisalog}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - paisalog_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-paisalog} -d $${POSTGRES_DB:-paisalog}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  paisalog_postgres_data:
