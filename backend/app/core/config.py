@@ -30,6 +30,10 @@ class Settings(BaseSettings):
         default_factory=list,
         validation_alias="CORS_ORIGINS",
     )
+    access_token_expire_minutes: int = Field(
+    default=1440,
+    validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
+)
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",
