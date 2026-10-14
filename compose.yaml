@@ -10,7 +10,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://paisalog:paisalog@postgres:5432/paisalog
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -19,9 +19,9 @@ services:
     image: postgres:16
     container_name: paisalog_postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-paisalog}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paisalog}
-      POSTGRES_DB: ${POSTGRES_DB:-paisalog}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
