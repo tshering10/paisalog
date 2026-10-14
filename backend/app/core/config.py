@@ -1,6 +1,10 @@
 from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+
+# parents[3] points to the Paisalog project root.
+ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 class Settings(BaseSettings):
     app_name: str = "PaisaLog API"
@@ -27,7 +31,7 @@ class Settings(BaseSettings):
         validation_alias="CORS_ORIGINS",
     )
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

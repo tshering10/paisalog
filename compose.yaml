@@ -11,6 +11,9 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+    volumes:
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
     depends_on:
       postgres:
         condition: service_healthy
