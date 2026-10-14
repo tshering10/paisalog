@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-
+from app.api.dependencies import DbSession
+from sqlalchemy import text
 app = FastAPI(
     title="PaisaLog API",
     version="0.1.0",
@@ -8,5 +9,6 @@ app = FastAPI(
 
 
 @app.get("/api/v1/health", tags=["health"])
-def health_check() -> dict[str, str]:
+def health_check(db: DbSession ) -> dict[str, str]:
+    db.execute(text("SELECT 1"))
     return {"status": "ok"}
