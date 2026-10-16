@@ -16,6 +16,10 @@ class TransactionNotFoundError(Exception):
     """Raised when an owned transaction cannot be found."""
 
 
+class InvalidTransactionFilterError(Exception):
+    """Raised when transaction list filters are inconsistent."""
+
+
 def _get_visible_category(
     db: Session,
     *,
@@ -93,8 +97,23 @@ def list_transactions(
     user_id: int,
     page: int,
     page_size: int,
+    transaction_type: str | None = None,
+    category_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> tuple[list[Transaction], int]:
     base_query = select(Transaction).where(Transaction.user_id == user_id)
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise InvalidTransactionFilterError
+    if transaction_type is not None:
+        base_query = base_query.where(Transaction.type == transaction_type)
+    if category_id is not None:
+        base_query = base_query.where(Transaction.category_id == category_id)
+    if date_from is not None:
+        base_query = base_query.where(Transaction.transaction_date >= date_from)
+    if date_to is not None:
+        base_query = base_query.where(Transaction.transaction_date <= date_to)
+
     total = db.scalar(
         select(func.count()).select_from(base_query.subquery())
     ) or 0

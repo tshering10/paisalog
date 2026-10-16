@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -7,9 +8,11 @@ from app.schemas.common import Page
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionRead,
+    TransactionType,
     TransactionUpdate,
 )
 from app.services.transactions import (
+    InvalidTransactionFilterError,
     InvalidTransactionCategoryError,
     TransactionNotFoundError,
     create_transaction,
@@ -71,13 +74,30 @@ def list_transaction_endpoint(
     db: DbSession,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    transaction_type: Annotated[
+        TransactionType | None,
+        Query(alias="type"),
+    ] = None,
+    category_id: Annotated[int | None, Query(gt=0)] = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> Page[TransactionRead]:
-    transactions, total = list_transactions(
-        db,
-        user_id=current_user.id,
-        page=page,
-        page_size=page_size,
-    )
+    try:
+        transactions, total = list_transactions(
+            db,
+            user_id=current_user.id,
+            page=page,
+            page_size=page_size,
+            transaction_type=transaction_type,
+            category_id=category_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except InvalidTransactionFilterError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from must be earlier than or equal to date_to",
+        ) from None
     return Page[TransactionRead](
         items=[TransactionRead.model_validate(item) for item in transactions],
         total=total,

@@ -262,3 +262,113 @@ def test_user_cannot_delete_another_users_transaction(client):
     response = client.delete(f"/api/v1/transactions/{transaction['id']}")
 
     assert response.status_code == 404
+
+
+def test_transaction_list_filters_by_type(client):
+    register_and_login(client, "filter-type@example.com", "Filter Type User")
+    expense_category = create_category(client, "Food", "expense")
+    income_category = create_category(client, "Salary", "income")
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(expense_category["id"]),
+    )
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            income_category["id"],
+            type="income",
+        ),
+    )
+
+    response = client.get("/api/v1/transactions?type=income")
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["type"] == "income"
+
+
+def test_transaction_list_filters_by_category_and_date_range(client):
+    register_and_login(client, "filter-combined@example.com", "Filter User")
+    food = create_category(client, "Food", "expense")
+    transport = create_category(client, "Transport", "expense")
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            food["id"],
+            transaction_date="2026-10-10",
+        ),
+    )
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            transport["id"],
+            transaction_date="2026-10-15",
+        ),
+    )
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            food["id"],
+            transaction_date="2026-10-20",
+        ),
+    )
+
+    response = client.get(
+        "/api/v1/transactions"
+        f"?category_id={food['id']}&date_from=2026-10-10&date_to=2026-10-20"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert all(
+        item["category_id"] == food["id"]
+        for item in response.json()["items"]
+    )
+
+
+def test_transaction_list_date_boundaries_are_inclusive(client):
+    register_and_login(client, "filter-boundary@example.com", "Boundary User")
+    category = create_category(client)
+    for transaction_date in ("2026-10-10", "2026-10-20", "2026-10-21"):
+        client.post(
+            "/api/v1/transactions",
+            json=transaction_payload(
+                category["id"],
+                transaction_date=transaction_date,
+            ),
+        )
+
+    response = client.get(
+        "/api/v1/transactions?date_from=2026-10-10&date_to=2026-10-20"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+
+
+def test_transaction_list_rejects_reversed_date_range(client):
+    register_and_login(client, "filter-invalid@example.com", "Invalid Filter")
+
+    response = client.get(
+        "/api/v1/transactions?date_from=2026-10-21&date_to=2026-10-20"
+    )
+
+    assert response.status_code == 422
+
+
+def test_transaction_list_page_past_last_page_is_empty(client):
+    register_and_login(client, "filter-page@example.com", "Page User")
+    category = create_category(client)
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(category["id"]),
+    )
+
+    response = client.get("/api/v1/transactions?page=2&page_size=1")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["items"] == []
+    assert body["total"] == 1
+    assert body["page"] == 2
+    assert body["page_size"] == 1
