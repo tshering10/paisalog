@@ -13,7 +13,7 @@ from app.schemas.transaction import (
     TransactionUpdate,
 )
 from app.schemas.user import LoginRequest, UserCreate, UserRead
-
+from app.schemas.analytics import MonthlySummary
 __all__ = [
     "CategoryRead",
     "CategoryCreate",
@@ -26,6 +26,7 @@ __all__ = [
     "TransactionRead",
     "TransactionType",
     "TransactionUpdate",
+    "MonthlySummary",
     "UserCreate",
     "UserRead",
 ]

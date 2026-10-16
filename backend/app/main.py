@@ -5,6 +5,7 @@ from app.api.routers.endpoints import (
     auth_router,
     categories_router,
     transactions_router,
+    analytics_router,
 )
 
 app = FastAPI(
@@ -16,6 +17,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(categories_router)
 app.include_router(transactions_router)
+app.include_router(analytics_router)
 
 @app.get("/api/v1/health", tags=["health"])
 def health_check(db: DbSession ) -> dict[str, str]:
