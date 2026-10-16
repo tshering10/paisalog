@@ -114,9 +114,7 @@ def list_transactions(
     if date_to is not None:
         base_query = base_query.where(Transaction.transaction_date <= date_to)
 
-    total = db.scalar(
-        select(func.count()).select_from(base_query.subquery())
-    ) or 0
+    total = db.scalar(select(func.count()).select_from(base_query.subquery())) or 0
     statement = (
         base_query.options(selectinload(Transaction.category))
         .order_by(Transaction.transaction_date.desc(), Transaction.id.desc())
@@ -144,10 +142,7 @@ def update_transaction(
 
     resulting_category_id = changes.get("category_id", transaction.category_id)
     resulting_type = changes.get("type", transaction.type)
-    if (
-        "category_id" in changes
-        or "type" in changes
-    ):
+    if "category_id" in changes or "type" in changes:
         _get_visible_category(
             db,
             category_id=resulting_category_id,
