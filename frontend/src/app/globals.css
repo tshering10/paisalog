@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-tint: #e0e7ff;
+  --color-secondary: #7c3aed;
+  --color-secondary-tint: #ede9fe;
+  --color-accent: #06b6d4;
+  --color-accent-tint: #cffafe;
+  --color-sidebar: #0b1026;
+  --color-sidebar-hover: #151b3b;
+  --color-income: #10b981;
+  --color-income-tint: #d1fae5;
+  --color-income-strong: #047857;
+  --color-expense: #f43f5e;
+  --color-expense-tint: #ffe4e6;
+  --color-expense-strong: #be123c;
+  --color-background: #f4f5fb;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-on-dark: #e2e8f0;
+  --color-warning: #f59e0b;
+  --font-heading: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-modal: 20px;
+  --shadow-card: 0 1px 2px rgb(17 24 39 / 4%), 0 8px 24px rgb(17 24 39 / 6%);
+  --shadow-hero: 0 12px 32px rgb(79 70 229 / 35%);
+  --shadow-modal: 0 24px 64px rgb(11 16 38 / 35%);
+}
+
+:root {
+  --chart-1: #4f46e5;
+  --chart-2: #06b6d4;
+  --chart-3: #f59e0b;
+  --chart-4: #ec4899;
+  --chart-5: #10b981;
+  --chart-6: #8b5cf6;
+  --chart-7: #f97316;
+  --chart-8: #64748b;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+.money {
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-hero {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+}
