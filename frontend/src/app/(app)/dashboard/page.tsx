@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { io } from "next/cache";
 import { ArrowLeft, ArrowRight, CalendarDays, Plus } from "lucide-react";
 
+import { getCategories } from "@/lib/categories-api";
 import {
   getExpensesByCategory,
   getMonthlySummary,
@@ -9,6 +11,7 @@ import {
 } from "@/lib/analytics-api";
 import { ExpenseDonutChart, MonthlyTrendChart } from "@/components/dashboard/dashboard-charts";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
+import { TransactionFormModal } from "@/components/transactions/transaction-form-modal";
 import { formatMoney, formatMonth } from "@/lib/format";
 
 type DashboardPageProps = {
@@ -36,12 +39,14 @@ function shiftMonth(year: number, month: number, offset: number): string {
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
+  await io();
   const { year, month } = parseMonth((await searchParams).month);
-  const [summary, expenses, trend, recentTransactions] = await Promise.all([
+  const [summary, expenses, trend, recentTransactions, categories] = await Promise.all([
     getMonthlySummary(year, month),
     getExpensesByCategory(year, month),
     getMonthlyTrend(year, month),
     getRecentTransactions(),
+    getCategories(),
   ]);
 
   return (
@@ -74,13 +79,18 @@ export default async function DashboardPage({
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
           </div>
-          <button
-            className="inline-flex h-11 items-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white shadow-hero transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            type="button"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            Add transaction
-          </button>
+          <TransactionFormModal
+            categories={categories}
+            trigger={
+              <button
+                className="inline-flex h-11 items-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white shadow-hero transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                type="button"
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                Add transaction
+              </button>
+            }
+          />
         </div>
       </div>
 

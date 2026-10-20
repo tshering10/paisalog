@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { ArrowRight, CircleDollarSign } from "lucide-react";
+import { ArrowRight, CircleDollarSign, Eye, EyeOff } from "lucide-react";
 import { ApiError } from "@/lib/api";
 import { login } from "@/lib/auth-api";
 
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,16 +98,26 @@ export default function LoginPage() {
           <span className="mb-2 block text-xs font-medium text-text-muted">
             Password
           </span>
-          <input
-            className="h-11 w-full rounded-control border border-border bg-surface px-3 text-base outline-none transition placeholder:text-text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            aria-describedby={fieldErrors.password ? "password-error" : undefined}
-            required
-          />
+          <div className="relative">
+            <input
+              className="h-11 w-full rounded-control border border-border bg-surface px-3 pr-11 text-base outline-none transition placeholder:text-text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              aria-describedby={fieldErrors.password ? "password-error" : undefined}
+              required
+            />
+            <button
+              className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-text-muted hover:text-text focus-visible:outline-2 focus-visible:outline-primary"
+              type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? <EyeOff className="size-5" aria-hidden="true" /> : <Eye className="size-5" aria-hidden="true" />}
+            </button>
+          </div>
           {fieldErrors.password && (
             <span id="password-error" className="mt-1 block text-xs text-expense-strong">
               {fieldErrors.password}
