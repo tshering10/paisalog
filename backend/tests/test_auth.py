@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
 from app.core.config import get_settings
-
 
 REGISTER_PAYLOAD = {
     "email": "User1@Example.com",
@@ -16,12 +15,19 @@ def test_register_returns_safe_user(client):
     response = client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
 
     assert response.status_code == 201
+    assert "access_token=" in response.headers["set-cookie"]
+    assert "httponly" in response.headers["set-cookie"].lower()
     body = response.json()
     assert body["email"] == "user1@example.com"
     assert body["full_name"] == "Test User"
     assert body["is_active"] is True
     assert "password" not in body
     assert "hashed_password" not in body
+
+    me_response = client.get("/api/v1/auth/me")
+
+    assert me_response.status_code == 200
+    assert me_response.json()["email"] == "user1@example.com"
 
 
 def test_duplicate_email_is_case_insensitive(client):
@@ -114,7 +120,7 @@ def test_me_rejects_expired_token(client):
     token = jwt.encode(
         {
             "sub": "1",
-            "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+            "exp": datetime.now(UTC) - timedelta(minutes=1),
         },
         settings.secret_key,
         algorithm="HS256",

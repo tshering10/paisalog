@@ -11,11 +11,29 @@ from app.services.auth import (
     register_user,
 )
 
-
 router = APIRouter(
     prefix="/api/v1/auth",
     tags=["authentication"],
 )
+
+
+def set_auth_cookie(response: Response, user_id: int) -> None:
+    settings = get_settings()
+    token = create_access_token(
+        user_id=user_id,
+        secret_key=settings.secret_key,
+        expires_minutes=settings.access_token_expire_minutes,
+    )
+
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
 
 
 @router.post(
@@ -25,6 +43,7 @@ router = APIRouter(
 )
 def register(
     user_data: UserCreate,
+    response: Response,
     db: DbSession,
 ) -> UserRead:
     try:
@@ -35,6 +54,7 @@ def register(
             detail="Email is already registered",
         ) from None
 
+    set_auth_cookie(response, user.id)
     return UserRead.model_validate(user)
 
 
@@ -60,23 +80,7 @@ def login(
             detail="Invalid email or password",
         ) from None
 
-    settings = get_settings()
-    token = create_access_token(
-        user_id=user.id,
-        secret_key=settings.secret_key,
-        expires_minutes=settings.access_token_expire_minutes,
-    )
-
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.access_token_expire_minutes * 60,
-        path="/",
-    )
-
+    set_auth_cookie(response, user.id)
     return UserRead.model_validate(user)
 
 
