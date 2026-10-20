@@ -50,6 +50,16 @@ export function TransactionFormModal({
 
   const availableCategories = categories.filter((category) => category.type === type);
 
+  function resetForm() {
+    setType(transaction?.type ?? "expense");
+    setAmount(transaction?.amount ?? "");
+    setCategoryId(transaction ? String(transaction.category_id) : "");
+    setDate(transaction?.transaction_date ?? today());
+    setDescription(transaction?.description ?? "");
+    setErrors({});
+    setMessage("");
+  }
+
   function validate(): FormErrors {
     const nextErrors: FormErrors = {};
     if (!amount || Number(amount) <= 0) nextErrors.amount = "Amount must be greater than 0.";
@@ -102,8 +112,7 @@ export function TransactionFormModal({
       <span
         className="contents"
         onClick={() => {
-          setMessage("");
-          setErrors({});
+          resetForm();
           setOpen(true);
         }}
       >
