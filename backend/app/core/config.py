@@ -31,9 +31,17 @@ class Settings(BaseSettings):
         validation_alias="CORS_ORIGINS",
     )
     access_token_expire_minutes: int = Field(
-    default=1440,
-    validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
-)
+        default=1440,
+        validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
+    )
+    password_reset_token_expire_minutes: int = Field(
+        default=5,
+        validation_alias="PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",
+    )
+    frontend_url: str = Field(
+        default="http://localhost:3000",
+        validation_alias="FRONTEND_URL",
+    )
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

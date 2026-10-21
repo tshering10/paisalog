@@ -13,7 +13,14 @@ from app.schemas.transaction import (
     TransactionType,
     TransactionUpdate,
 )
-from app.schemas.user import LoginRequest, UserCreate, UserRead
+from app.schemas.user import (
+    LoginRequest,
+    PasswordChangeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    UserCreate,
+    UserRead,
+)
 
 __all__ = [
     "CategoryCreate",
@@ -24,6 +31,9 @@ __all__ = [
     "LoginRequest",
     "MonthlySummary",
     "Page",
+    "PasswordChangeRequest",
+    "PasswordResetConfirmRequest",
+    "PasswordResetRequest",
     "TransactionCreate",
     "TransactionRead",
     "TransactionType",

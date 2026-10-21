@@ -1,15 +1,33 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Response, status
+from sqlalchemy import select
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.security import create_access_token
-from app.schemas.user import LoginRequest, UserCreate, UserRead
+from app.models.user import User
+from app.schemas.user import (
+    LoginRequest,
+    PasswordChangeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    UserCreate,
+    UserRead,
+)
 from app.services.auth import (
+    CurrentPasswordIncorrectError,
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
+    InvalidPasswordResetTokenError,
     authenticate_user,
+    change_password,
+    create_password_reset_token,
     register_user,
+    reset_password,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/auth",
@@ -107,3 +125,71 @@ def logout(response: Response) -> None:
         httponly=True,
         samesite=settings.cookie_samesite,
     )
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def change_password_endpoint(
+    password_data: PasswordChangeRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    try:
+        change_password(
+            db=db,
+            user=current_user,
+            current_password=password_data.current_password,
+            new_password=password_data.new_password,
+        )
+    except CurrentPasswordIncorrectError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        ) from None
+
+
+@router.post(
+    "/password-reset/request",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def request_password_reset(
+    reset_data: PasswordResetRequest,
+    db: DbSession,
+) -> None:
+    user = db.scalar(
+        select(User).where(User.email == str(reset_data.email).strip().lower())
+    )
+    if user is not None and user.is_active:
+        settings = get_settings()
+        raw_token = create_password_reset_token(
+            db=db,
+            user=user,
+            expires_minutes=settings.password_reset_token_expire_minutes,
+        )
+        reset_url = (
+            f"{settings.frontend_url.rstrip('/')}/reset-password?token={raw_token}"
+        )
+        logger.warning("Password reset link for %s: %s", user.email, reset_url)
+
+
+@router.post(
+    "/password-reset/confirm",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def confirm_password_reset(
+    reset_data: PasswordResetConfirmRequest,
+    db: DbSession,
+) -> None:
+    try:
+        reset_password(
+            db=db,
+            raw_token=reset_data.token,
+            new_password=reset_data.new_password,
+        )
+    except InvalidPasswordResetTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        ) from None

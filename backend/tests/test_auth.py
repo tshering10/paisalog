@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -147,3 +148,165 @@ def test_logout_clears_cookie_and_protected_access(client):
 
     assert logout_response.status_code == 204
     assert me_response.status_code == 401
+
+
+def test_change_password_requires_authentication(client):
+    response = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "password123",
+            "new_password": "new-password123",
+            "confirm_new_password": "new-password123",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_change_password_rejects_wrong_current_password(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "wrong-password",
+            "new_password": "new-password123",
+            "confirm_new_password": "new-password123",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Current password is incorrect"}
+
+
+def test_change_password_rejects_mismatched_new_passwords(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "password123",
+            "new_password": "new-password123",
+            "confirm_new_password": "different-password123",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_change_password_allows_login_with_new_password(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    change_response = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "password123",
+            "new_password": "new-password123",
+            "confirm_new_password": "new-password123",
+        },
+    )
+
+    assert change_response.status_code == 204
+
+    old_password_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "user1@example.com",
+            "password": "password123",
+        },
+    )
+    assert old_password_response.status_code == 401
+
+    new_password_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "user1@example.com",
+            "password": "new-password123",
+        },
+    )
+    assert new_password_response.status_code == 200
+
+
+def test_password_reset_request_uses_generic_response_for_unknown_email(client):
+    response = client.post(
+        "/api/v1/auth/password-reset/request",
+        json={"email": "missing@example.com"},
+    )
+
+    assert response.status_code == 202
+    assert response.content == b""
+
+
+def test_password_reset_changes_password_and_token_is_single_use(client, caplog):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    request_response = client.post(
+        "/api/v1/auth/password-reset/request",
+        json={"email": "user1@example.com"},
+    )
+
+    assert request_response.status_code == 202
+    match = re.search(r"reset-password\?token=([A-Za-z0-9_-]+)", caplog.text)
+    assert match is not None
+    token = match.group(1)
+
+    reset_response = client.post(
+        "/api/v1/auth/password-reset/confirm",
+        json={
+            "token": token,
+            "new_password": "reset-password123",
+            "confirm_new_password": "reset-password123",
+        },
+    )
+
+    assert reset_response.status_code == 204
+
+    old_password_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "user1@example.com",
+            "password": "password123",
+        },
+    )
+    assert old_password_response.status_code == 401
+
+    new_password_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "user1@example.com",
+            "password": "reset-password123",
+        },
+    )
+    assert new_password_response.status_code == 200
+
+    reused_token_response = client.post(
+        "/api/v1/auth/password-reset/confirm",
+        json={
+            "token": token,
+            "new_password": "another-password123",
+            "confirm_new_password": "another-password123",
+        },
+    )
+    assert reused_token_response.status_code == 400
+
+
+def test_password_reset_rejects_mismatched_passwords(client, caplog):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post(
+        "/api/v1/auth/password-reset/request",
+        json={"email": "user1@example.com"},
+    )
+
+    match = re.search(r"reset-password\?token=([A-Za-z0-9_-]+)", caplog.text)
+    assert match is not None
+
+    response = client.post(
+        "/api/v1/auth/password-reset/confirm",
+        json={
+            "token": match.group(1),
+            "new_password": "new-password123",
+            "confirm_new_password": "different-password123",
+        },
+    )
+
+    assert response.status_code == 422
