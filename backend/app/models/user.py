@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
-from sqlalchemy import BigInteger, Boolean, DateTime, Index, String, func
+
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -9,20 +10,18 @@ if TYPE_CHECKING:
     from app.models.category import Category
     from app.models.transaction import Transaction
 
+
 class User(Base):
     __tablename__ = "users"
-    
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
         autoincrement=True,
     )
-    
-    email: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False
-    )
-    
+
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+
     full_name: Mapped[str] = mapped_column(
         String(150),
         nullable=False,
@@ -38,6 +37,22 @@ class User(Base):
         default=True,
         server_default="true",
     )
+    token_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    password_reset_request_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    password_reset_request_window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -51,7 +66,7 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    
+
     categories: Mapped[list["Category"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -61,7 +76,7 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    
+
     __table_args__ = (
         Index(
             "uq_users_email_lower",

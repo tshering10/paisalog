@@ -25,7 +25,7 @@ def get_current_user(
         )
 
     try:
-        user_id = decode_access_token(
+        user_id, token_version = decode_access_token(
             token=access_token,
             secret_key=get_settings().secret_key,
         )
@@ -37,7 +37,7 @@ def get_current_user(
         ) from None
 
     user = db.scalar(select(User).where(User.id == user_id))
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.token_version != token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token",

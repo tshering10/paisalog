@@ -35,10 +35,11 @@ router = APIRouter(
 )
 
 
-def set_auth_cookie(response: Response, user_id: int) -> None:
+def set_auth_cookie(response: Response, user_id: int, token_version: int) -> None:
     settings = get_settings()
     token = create_access_token(
         user_id=user_id,
+        token_version=token_version,
         secret_key=settings.secret_key,
         expires_minutes=settings.access_token_expire_minutes,
     )
@@ -72,7 +73,7 @@ def register(
             detail="Email is already registered",
         ) from None
 
-    set_auth_cookie(response, user.id)
+    set_auth_cookie(response, user.id, user.token_version)
     return UserRead.model_validate(user)
 
 
@@ -98,7 +99,7 @@ def login(
             detail="Invalid email or password",
         ) from None
 
-    set_auth_cookie(response, user.id)
+    set_auth_cookie(response, user.id, user.token_version)
     return UserRead.model_validate(user)
 
 
@@ -167,7 +168,13 @@ def request_password_reset(
             db=db,
             user=user,
             expires_minutes=settings.password_reset_token_expire_minutes,
+            rate_limit_count=settings.password_reset_rate_limit_count,
+            rate_limit_window_minutes=(
+                settings.password_reset_rate_limit_window_minutes
+            ),
         )
+        if raw_token is None:
+            return
         reset_url = (
             f"{settings.frontend_url.rstrip('/')}/reset-password?token={raw_token}"
         )

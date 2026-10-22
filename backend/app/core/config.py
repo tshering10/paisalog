@@ -1,26 +1,27 @@
 from functools import lru_cache
+from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pathlib import Path
 
 # parents[3] points to the Paisalog project root.
 ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
+
 class Settings(BaseSettings):
     app_name: str = "PaisaLog API"
     app_version: str = "0.1.0"
-    
+
     database_url: str = Field(..., validation_alias="DATABASE_URL")
     test_database_url: str | None = Field(
         default=None,
         validation_alias="TEST_DATABASE_URL",
     )
     secret_key: str = Field(..., validation_alias="SECRET_KEY")
-    
+
     cookie_secure: bool = Field(
         default=False,
         validation_alias="COOKIE_SECURE",
-        
     )
     cookie_samesite: str = Field(
         default="lax",
@@ -38,6 +39,14 @@ class Settings(BaseSettings):
         default=5,
         validation_alias="PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",
     )
+    password_reset_rate_limit_count: int = Field(
+        default=3,
+        validation_alias="PASSWORD_RESET_RATE_LIMIT_COUNT",
+    )
+    password_reset_rate_limit_window_minutes: int = Field(
+        default=15,
+        validation_alias="PASSWORD_RESET_RATE_LIMIT_WINDOW_MINUTES",
+    )
     frontend_url: str = Field(
         default="http://localhost:3000",
         validation_alias="FRONTEND_URL",
@@ -48,6 +57,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
 
 @lru_cache
 def get_settings() -> Settings:

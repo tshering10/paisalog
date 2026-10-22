@@ -3,12 +3,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+import app.models
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import category, transaction, user
-
 
 settings = get_settings()
 test_engine = create_engine(settings.test_database_url, pool_pre_ping=True)

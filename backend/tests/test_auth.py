@@ -227,6 +227,22 @@ def test_change_password_allows_login_with_new_password(client):
     assert new_password_response.status_code == 200
 
 
+def test_change_password_invalidates_existing_session(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "password123",
+            "new_password": "new-password123",
+            "confirm_new_password": "new-password123",
+        },
+    )
+
+    response = client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401
+
+
 def test_password_reset_request_uses_generic_response_for_unknown_email(client):
     response = client.post(
         "/api/v1/auth/password-reset/request",
@@ -234,7 +250,27 @@ def test_password_reset_request_uses_generic_response_for_unknown_email(client):
     )
 
     assert response.status_code == 202
-    assert response.content == b""
+    assert response.json() is None
+
+
+def test_password_reset_request_is_rate_limited(client, caplog):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    for _ in range(3):
+        response = client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"email": "user1@example.com"},
+        )
+        assert response.status_code == 202
+
+    caplog.clear()
+    response = client.post(
+        "/api/v1/auth/password-reset/request",
+        json={"email": "user1@example.com"},
+    )
+
+    assert response.status_code == 202
+    assert "Password reset link" not in caplog.text
 
 
 def test_password_reset_changes_password_and_token_is_single_use(client, caplog):
@@ -260,6 +296,7 @@ def test_password_reset_changes_password_and_token_is_single_use(client, caplog)
     )
 
     assert reset_response.status_code == 204
+    assert client.get("/api/v1/auth/me").status_code == 401
 
     old_password_response = client.post(
         "/api/v1/auth/login",

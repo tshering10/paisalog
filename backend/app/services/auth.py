@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -85,6 +85,7 @@ def change_password(
         raise CurrentPasswordIncorrectError
 
     user.hashed_password = hash_password(new_password)
+    user.token_version += 1
     db.commit()
 
 
@@ -92,10 +93,29 @@ def create_password_reset_token(
     db: Session,
     user: User,
     expires_minutes: int,
-) -> str:
+    rate_limit_count: int,
+    rate_limit_window_minutes: int,
+) -> str | None:
+    user = db.scalar(select(User).where(User.id == user.id).with_for_update())
+    if user is None or not user.is_active:
+        return None
+
+    now = datetime.now(UTC)
+    window_start = user.password_reset_request_window_started_at
+    if (
+        window_start is None
+        or window_start + timedelta(minutes=rate_limit_window_minutes) <= now
+    ):
+        user.password_reset_request_count = 0
+        user.password_reset_request_window_started_at = now
+
+    if user.password_reset_request_count >= rate_limit_count:
+        db.commit()
+        return None
+
+    user.password_reset_request_count += 1
     raw_token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-    now = datetime.now(UTC)
     db.execute(
         update(PasswordResetToken)
         .where(
@@ -103,6 +123,12 @@ def create_password_reset_token(
             PasswordResetToken.used_at.is_(None),
         )
         .values(used_at=now)
+    )
+    db.execute(
+        delete(PasswordResetToken).where(
+            (PasswordResetToken.used_at.is_not(None))
+            | (PasswordResetToken.expires_at <= now)
+        )
     )
     token = PasswordResetToken(
         user_id=user.id,
@@ -119,13 +145,19 @@ def reset_password(
     raw_token: str,
     new_password: str,
 ) -> None:
+    now = datetime.now(UTC)
+    db.execute(
+        delete(PasswordResetToken).where(
+            (PasswordResetToken.used_at.is_not(None))
+            | (PasswordResetToken.expires_at <= now)
+        )
+    )
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     token = db.scalar(
         select(PasswordResetToken)
         .where(PasswordResetToken.token_hash == token_hash)
         .with_for_update()
     )
-    now = datetime.now(UTC)
 
     if token is None or token.used_at is not None or token.expires_at <= now:
         raise InvalidPasswordResetTokenError
@@ -135,5 +167,6 @@ def reset_password(
         raise InvalidPasswordResetTokenError
 
     user.hashed_password = hash_password(new_password)
+    user.token_version += 1
     token.used_at = now
     db.commit()
