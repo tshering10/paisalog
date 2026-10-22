@@ -35,3 +35,44 @@ export function register(input: RegisterInput) {
 export function logout(): Promise<void> {
   return apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
 }
+
+export type PasswordChangeInput = {
+  current_password: string;
+  new_password: string;
+  confirm_new_password: string;
+};
+
+export type PasswordResetRequestInput = {
+  email: string;
+};
+
+export type PasswordResetConfirmInput = {
+  token: string;
+  new_password: string;
+  confirm_new_password: string;
+};
+
+export function changePassword(input: PasswordChangeInput): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function requestPasswordReset(
+  input: PasswordResetRequestInput,
+): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function confirmPasswordReset(
+  input: PasswordResetConfirmInput,
+): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

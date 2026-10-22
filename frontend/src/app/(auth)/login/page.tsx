@@ -135,7 +135,13 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="mt-8 text-center text-sm text-text-muted">
+      <p className="mt-5 text-center text-sm">
+        <Link className="font-semibold text-primary hover:text-primary-hover" href="/forgot-password">
+          Forgot your password?
+        </Link>
+      </p>
+
+      <p className="mt-5 text-center text-sm text-text-muted">
         New to PaisaLog?{" "}
         <Link className="font-semibold text-primary hover:text-primary-hover" href="/register">
           Create an account

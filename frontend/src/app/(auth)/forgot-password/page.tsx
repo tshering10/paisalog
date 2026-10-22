@@ -1,0 +1,99 @@
+"use client";
+
+import Link from "next/link";
+import { type FormEvent, useState } from "react";
+import { ArrowLeft, ArrowRight, CircleDollarSign } from "lucide-react";
+
+import { ApiError } from "@/lib/api";
+import { requestPasswordReset } from "@/lib/auth-api";
+
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      await requestPasswordReset({ email });
+      setSubmitted(true);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : "We could not connect to PaisaLog. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-10 lg:hidden">
+        <div className="bg-hero -mx-6 -mt-12 px-6 py-8 text-white sm:-mx-10 sm:px-10">
+          <div className="flex items-center gap-2 text-xl font-bold">
+            <CircleDollarSign className="size-8 text-cyan-200" aria-hidden="true" />
+            <span>PaisaLog</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <p className="text-sm font-semibold text-primary">Account recovery</p>
+        <h1 className="mt-2 font-heading text-3xl font-bold text-text">
+          Forgot your password?
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-text-muted">
+          Enter your email and we&apos;ll help you create a new password.
+        </p>
+      </div>
+
+      {submitted ? (
+        <div className="rounded-control bg-income-tint px-4 py-4 text-sm leading-6 text-income-strong" role="status">
+          If an account exists for that email, a password reset link has been sent.
+          Check your inbox or the development API logs.
+        </div>
+      ) : (
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          {error && (
+            <div className="rounded-control bg-expense-tint px-4 py-3 text-sm text-expense-strong" role="alert">
+              {error}
+            </div>
+          )}
+          <label className="block">
+            <span className="mb-2 block text-xs font-medium text-text-muted">
+              Email address
+            </span>
+            <input
+              className="h-11 w-full rounded-control border border-border bg-surface px-3 text-base outline-none transition placeholder:text-text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
+          </label>
+          <button
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-primary px-5 font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+            type="submit"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Sending..." : "Send reset link"}
+            {!isSubmitting && <ArrowRight className="size-4" aria-hidden="true" />}
+          </button>
+        </form>
+      )}
+
+      <Link className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-hover" href="/login">
+        <ArrowLeft className="size-4" aria-hidden="true" />
+        Back to login
+      </Link>
+    </div>
+  );
+}

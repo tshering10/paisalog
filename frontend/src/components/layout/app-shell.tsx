@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, CircleDollarSign, LayoutDashboard, LogOut, Tags } from "lucide-react";
+import { BarChart3, CircleDollarSign, LayoutDashboard, LogOut, Settings, Tags } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { logout, type User } from "@/lib/auth-api";
@@ -10,6 +10,7 @@ const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: BarChart3 },
   { href: "/categories", label: "Categories", icon: Tags },
+  { href: "/settings/security", label: "Security", icon: Settings },
 ];
 
 export function AppShell({
