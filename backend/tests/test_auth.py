@@ -229,6 +229,58 @@ def test_logout_clears_cookie_and_protected_access(client):
     assert me_response.status_code == 401
 
 
+def test_login_creates_active_session(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.get("/api/v1/auth/sessions")
+
+    assert response.status_code == 200
+    sessions = response.json()
+    assert len(sessions) == 1
+    assert sessions[0]["is_current"] is True
+    assert sessions[0]["user_agent"]
+
+
+def test_logout_revokes_current_session(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    logout_response = client.post("/api/v1/auth/logout")
+    sessions_response = client.get("/api/v1/auth/sessions")
+
+    assert logout_response.status_code == 204
+    assert sessions_response.status_code == 401
+
+
+def test_user_can_revoke_another_session(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post(
+        "/api/v1/auth/login",
+        json={"email": "user1@example.com", "password": "password123"},
+    )
+    sessions = client.get("/api/v1/auth/sessions").json()
+    other_session = next(session for session in sessions if not session["is_current"])
+
+    response = client.delete(f"/api/v1/auth/sessions/{other_session['id']}")
+
+    assert response.status_code == 204
+    assert len(client.get("/api/v1/auth/sessions").json()) == 1
+
+
+def test_user_can_revoke_other_sessions(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post(
+        "/api/v1/auth/login",
+        json={"email": "user1@example.com", "password": "password123"},
+    )
+
+    response = client.post("/api/v1/auth/sessions/revoke-others")
+
+    assert response.status_code == 204
+    sessions = client.get("/api/v1/auth/sessions").json()
+    assert len(sessions) == 1
+    assert sessions[0]["is_current"] is True
+
+
 def test_change_password_requires_authentication(client):
     response = client.post(
         "/api/v1/auth/change-password",

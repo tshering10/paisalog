@@ -18,6 +18,7 @@ def create_access_token(
     *,
     user_id: int,
     token_version: int,
+    session_id: str,
     secret_key: str,
     expires_minutes: int,
 ) -> str:
@@ -26,13 +27,14 @@ def create_access_token(
     payload = {
         "sub": str(user_id),
         "ver": token_version,
+        "sid": session_id,
         "exp": expires_at,
     }
 
     return jwt.encode(payload, secret_key, algorithm="HS256")
 
 
-def decode_access_token(*, token: str, secret_key: str) -> tuple[int, int]:
+def decode_access_token(*, token: str, secret_key: str) -> tuple[int, int, str]:
     payload = jwt.decode(token, secret_key, algorithms=["HS256"])
     subject = payload.get("sub")
 
@@ -41,8 +43,11 @@ def decode_access_token(*, token: str, secret_key: str) -> tuple[int, int]:
     token_version = payload.get("ver")
     if not isinstance(token_version, int):
         raise jwt.InvalidTokenError("Token version is missing")
+    session_id = payload.get("sid")
+    if not isinstance(session_id, str):
+        raise jwt.InvalidTokenError("Token session is missing")
 
     try:
-        return int(subject), token_version
+        return int(subject), token_version, session_id
     except ValueError as exc:
         raise jwt.InvalidTokenError("Token subject is invalid") from exc

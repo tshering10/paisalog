@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 from unicodedata import category
 
 from pydantic import (
@@ -9,6 +10,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+if TYPE_CHECKING:
+    from app.models.session import UserSession
 
 
 def validate_full_name(value: str) -> str:
@@ -95,3 +99,30 @@ class UserRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class SessionRead(BaseModel):
+    id: str
+    user_agent: str | None
+    ip_address: str | None
+    created_at: datetime
+    last_used_at: datetime
+    expires_at: datetime
+    is_current: bool
+
+    @classmethod
+    def from_session(
+        cls,
+        session: "UserSession",
+        *,
+        is_current: bool,
+    ) -> "SessionRead":
+        return cls(
+            id=session.id,
+            user_agent=session.user_agent,
+            ip_address=session.ip_address,
+            created_at=session.created_at,
+            last_used_at=session.last_used_at,
+            expires_at=session.expires_at,
+            is_current=is_current,
+        )

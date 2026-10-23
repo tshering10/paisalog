@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
 
 import { ApiError } from "@/lib/api";
-import { changePassword } from "@/lib/auth-api";
+import {
+  changePassword,
+  getSessions,
+  revokeOtherSessions,
+  revokeSession,
+  type UserSession,
+} from "@/lib/auth-api";
 
 export default function SecuritySettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -15,6 +21,67 @@ export default function SecuritySettingsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [sessionError, setSessionError] = useState("");
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [isRevokingOthers, setIsRevokingOthers] = useState(false);
+
+  async function loadSessions() {
+    setSessionError("");
+    try {
+      setSessions(await getSessions());
+    } catch {
+      setSessionError("We could not load your active sessions.");
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getSessions()
+      .then((loadedSessions) => {
+        if (!cancelled) {
+          setSessions(loadedSessions);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSessionError("We could not load your active sessions.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingSessions(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleRevokeSession(sessionId: string) {
+    try {
+      await revokeSession(sessionId);
+      await loadSessions();
+    } catch {
+      setSessionError("We could not revoke that session.");
+    }
+  }
+
+  async function handleRevokeOthers() {
+    setIsRevokingOthers(true);
+    try {
+      await revokeOtherSessions();
+      await loadSessions();
+    } catch {
+      setSessionError("We could not sign out your other sessions.");
+    } finally {
+      setIsRevokingOthers(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,6 +176,65 @@ export default function SecuritySettingsPage() {
           {!isSubmitting && <ArrowRight className="size-4" aria-hidden="true" />}
         </button>
       </form>
+
+      <section className="mt-10 max-w-2xl" aria-labelledby="sessions-heading">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 id="sessions-heading" className="font-heading text-xl font-bold text-text">
+              Active sessions
+            </h2>
+            <p className="mt-1 text-sm text-text-muted">
+              Review devices that are currently signed in to your account.
+            </p>
+          </div>
+          <button
+            className="text-sm font-semibold text-primary hover:text-primary-hover disabled:opacity-60"
+            type="button"
+            onClick={handleRevokeOthers}
+            disabled={isRevokingOthers || sessions.filter((session) => !session.is_current).length === 0}
+          >
+            {isRevokingOthers ? "Signing out..." : "Sign out other sessions"}
+          </button>
+        </div>
+
+        {sessionError && (
+          <div className="mt-4 rounded-control bg-expense-tint px-4 py-3 text-sm text-expense-strong" role="alert">
+            {sessionError}
+          </div>
+        )}
+        {isLoadingSessions ? (
+          <p className="mt-5 text-sm text-text-muted">Loading sessions...</p>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {sessions.map((session) => (
+              <div className="rounded-card border border-border bg-surface p-4 shadow-card" key={session.id}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-text">
+                      {session.is_current ? "This device" : "Signed-in device"}
+                    </p>
+                    <p className="mt-1 truncate text-sm text-text-muted">
+                      {session.user_agent ?? "Unknown browser"}
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Last active {new Date(session.last_used_at).toLocaleString()}
+                    </p>
+                  </div>
+                  {!session.is_current && (
+                    <button
+                      className="shrink-0 text-sm font-semibold text-expense-strong hover:underline"
+                      type="button"
+                      onClick={() => void handleRevokeSession(session.id)}
+                    >
+                      Sign out
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

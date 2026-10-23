@@ -91,3 +91,29 @@ export function confirmPasswordReset(
     body: JSON.stringify(input),
   });
 }
+
+export type UserSession = {
+  id: string;
+  user_agent: string | null;
+  ip_address: string | null;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  is_current: boolean;
+};
+
+export function getSessions(): Promise<UserSession[]> {
+  return apiRequest<UserSession[]>("/api/v1/auth/sessions");
+}
+
+export function revokeSession(sessionId: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/auth/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
+export function revokeOtherSessions(): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/sessions/revoke-others", {
+    method: "POST",
+  });
+}

@@ -1,17 +1,19 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import CurrentSession, CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.security import create_access_token
+from app.models.session import UserSession
 from app.models.user import User
 from app.schemas.user import (
     LoginRequest,
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
+    SessionRead,
     UserCreate,
     UserProfileUpdate,
     UserRead,
@@ -28,6 +30,12 @@ from app.services.auth import (
     reset_password,
     update_profile,
 )
+from app.services.sessions import (
+    create_session,
+    list_active_sessions,
+    revoke_other_sessions,
+    revoke_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +45,17 @@ router = APIRouter(
 )
 
 
-def set_auth_cookie(response: Response, user_id: int, token_version: int) -> None:
+def set_auth_cookie(
+    response: Response,
+    user_id: int,
+    token_version: int,
+    session_id: str,
+) -> None:
     settings = get_settings()
     token = create_access_token(
         user_id=user_id,
         token_version=token_version,
+        session_id=session_id,
         secret_key=settings.secret_key,
         expires_minutes=settings.access_token_expire_minutes,
     )
@@ -65,6 +79,7 @@ def set_auth_cookie(response: Response, user_id: int, token_version: int) -> Non
 def register(
     user_data: UserCreate,
     response: Response,
+    request: Request,
     db: DbSession,
 ) -> UserRead:
     try:
@@ -75,7 +90,14 @@ def register(
             detail="Email is already registered",
         ) from None
 
-    set_auth_cookie(response, user.id, user.token_version)
+    session = create_session(
+        db,
+        user_id=user.id,
+        expires_minutes=get_settings().access_token_expire_minutes,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    set_auth_cookie(response, user.id, user.token_version, session.id)
     return UserRead.model_validate(user)
 
 
@@ -87,6 +109,7 @@ def register(
 def login(
     login_data: LoginRequest,
     response: Response,
+    request: Request,
     db: DbSession,
 ) -> UserRead:
     try:
@@ -101,7 +124,14 @@ def login(
             detail="Invalid email or password",
         ) from None
 
-    set_auth_cookie(response, user.id, user.token_version)
+    session = create_session(
+        db,
+        user_id=user.id,
+        expires_minutes=get_settings().access_token_expire_minutes,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    set_auth_cookie(response, user.id, user.token_version, session.id)
     return UserRead.model_validate(user)
 
 
@@ -132,8 +162,13 @@ def update_profile_endpoint(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def logout(response: Response) -> None:
+def logout(
+    response: Response,
+    current_session: CurrentSession,
+    db: DbSession,
+) -> None:
     settings = get_settings()
+    revoke_session(db, current_session)
 
     response.delete_cookie(
         key="access_token",
@@ -141,6 +176,53 @@ def logout(response: Response) -> None:
         secure=settings.cookie_secure,
         httponly=True,
         samesite=settings.cookie_samesite,
+    )
+
+
+@router.get("/sessions", response_model=list[SessionRead])
+def get_sessions(
+    current_user: CurrentUser,
+    current_session: CurrentSession,
+    db: DbSession,
+) -> list[SessionRead]:
+    return [
+        SessionRead.from_session(
+            session,
+            is_current=session.id == current_session.id,
+        )
+        for session in list_active_sessions(db, current_user.id)
+    ]
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_session_endpoint(
+    session_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.id == session_id,
+            UserSession.user_id == current_user.id,
+        )
+    )
+    if session is not None:
+        revoke_session(db, session)
+
+
+@router.post(
+    "/sessions/revoke-others",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def revoke_other_sessions_endpoint(
+    current_user: CurrentUser,
+    current_session: CurrentSession,
+    db: DbSession,
+) -> None:
+    revoke_other_sessions(
+        db,
+        user_id=current_user.id,
+        current_session_id=current_session.id,
     )
 
 

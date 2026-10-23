@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
 from app.models.password_reset_token import PasswordResetToken
+from app.models.session import UserSession
 from app.models.user import User
 from app.schemas.user import UserCreate, UserProfileUpdate
 
@@ -98,6 +99,11 @@ def change_password(
 
     user.hashed_password = hash_password(new_password)
     user.token_version += 1
+    db.execute(
+        update(UserSession)
+        .where(UserSession.user_id == user.id)
+        .values(revoked_at=datetime.now(UTC))
+    )
     db.commit()
 
 
@@ -181,4 +187,7 @@ def reset_password(
     user.hashed_password = hash_password(new_password)
     user.token_version += 1
     token.used_at = now
+    db.execute(
+        update(UserSession).where(UserSession.user_id == user.id).values(revoked_at=now)
+    )
     db.commit()
