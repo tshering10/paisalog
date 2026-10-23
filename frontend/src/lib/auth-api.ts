@@ -25,6 +25,10 @@ export function login(input: LoginInput) {
   });
 }
 
+export function getCurrentUser(): Promise<User> {
+  return apiRequest<User>("/api/v1/auth/me");
+}
+
 export function register(input: RegisterInput) {
   return apiRequest<User>("/api/v1/auth/register", {
     method: "POST",
@@ -34,6 +38,17 @@ export function register(input: RegisterInput) {
 
 export function logout(): Promise<void> {
   return apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
+}
+
+export type UserProfileUpdateInput = {
+  full_name: string;
+};
+
+export function updateProfile(input: UserProfileUpdateInput): Promise<User> {
+  return apiRequest<User>("/api/v1/auth/profile", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
 
 export type PasswordChangeInput = {

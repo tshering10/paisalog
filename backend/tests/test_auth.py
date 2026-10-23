@@ -2,6 +2,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 import jwt
+import pytest
 
 from app.core.config import get_settings
 
@@ -42,6 +43,38 @@ def test_duplicate_email_is_case_insensitive(client):
 
     assert response.status_code == 409
     assert response.json() == {"detail": "Email is already registered"}
+
+
+@pytest.mark.parametrize(
+    "full_name",
+    ["John123", "!!!", "John@", "😀 User"],
+)
+def test_register_rejects_invalid_full_names(client, full_name):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            **REGISTER_PAYLOAD,
+            "email": f"{full_name.replace(' ', '')}@example.com",
+            "full_name": full_name,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("full_name", ["Mary Jane", "O'Connor", "Jean-Luc", "李小龍"])
+def test_register_accepts_realistic_full_names(client, full_name):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            **REGISTER_PAYLOAD,
+            "email": f"{full_name.replace(' ', '')}@example.com",
+            "full_name": full_name,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["full_name"] == full_name
 
 
 def test_login_sets_http_only_cookie(client):
@@ -106,6 +139,52 @@ def test_me_requires_authentication(client):
     response = client.get("/api/v1/auth/me")
 
     assert response.status_code == 401
+
+
+def test_profile_update_requires_authentication(client):
+    response = client.patch(
+        "/api/v1/auth/profile",
+        json={"full_name": "Updated User"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_profile_update_changes_full_name(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.patch(
+        "/api/v1/auth/profile",
+        json={"full_name": "  Updated User  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["full_name"] == "Updated User"
+    assert response.json()["email"] == "user1@example.com"
+    assert client.get("/api/v1/auth/me").json()["full_name"] == "Updated User"
+
+
+def test_profile_update_rejects_blank_name(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.patch(
+        "/api/v1/auth/profile",
+        json={"full_name": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("full_name", ["Updated123", "!!!", "Updated@User"])
+def test_profile_update_rejects_invalid_full_names(client, full_name):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.patch(
+        "/api/v1/auth/profile",
+        json={"full_name": full_name},
+    )
+
+    assert response.status_code == 422
 
 
 def test_me_rejects_tampered_token(client):

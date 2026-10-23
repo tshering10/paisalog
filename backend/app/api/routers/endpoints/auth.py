@@ -13,6 +13,7 @@ from app.schemas.user import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     UserCreate,
+    UserProfileUpdate,
     UserRead,
 )
 from app.services.auth import (
@@ -25,6 +26,7 @@ from app.services.auth import (
     create_password_reset_token,
     register_user,
     reset_password,
+    update_profile,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,6 +112,20 @@ def login(
 )
 def get_me(current_user: CurrentUser) -> UserRead:
     return UserRead.model_validate(current_user)
+
+
+@router.patch(
+    "/profile",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+)
+def update_profile_endpoint(
+    profile_data: UserProfileUpdate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> UserRead:
+    user = update_profile(db=db, user=current_user, profile_data=profile_data)
+    return UserRead.model_validate(user)
 
 
 @router.post(

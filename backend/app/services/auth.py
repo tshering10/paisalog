@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password, verify_password
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserProfileUpdate
 
 
 class EmailAlreadyRegisteredError(Exception):
@@ -72,6 +72,18 @@ def authenticate_user(
     if not user.is_active:
         raise InvalidCredentialsError
 
+    return user
+
+
+def update_profile(
+    db: Session,
+    user: User,
+    profile_data: UserProfileUpdate,
+) -> User:
+    full_name = profile_data.full_name.strip()
+    user.full_name = full_name
+    db.commit()
+    db.refresh(user)
     return user
 
 

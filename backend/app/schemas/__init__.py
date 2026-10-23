@@ -19,6 +19,7 @@ from app.schemas.user import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     UserCreate,
+    UserProfileUpdate,
     UserRead,
 )
 
@@ -39,5 +40,6 @@ __all__ = [
     "TransactionType",
     "TransactionUpdate",
     "UserCreate",
+    "UserProfileUpdate",
     "UserRead",
 ]
