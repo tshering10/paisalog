@@ -21,6 +21,10 @@ class InvalidCredentialsError(Exception):
     """Raised when login credentials are invalid."""
 
 
+class AccountDeactivatedError(Exception):
+    """Raised when valid credentials belong to a deactivated account."""
+
+
 class CurrentPasswordIncorrectError(Exception):
     """Raised when the current password is incorrect."""
 
@@ -71,7 +75,7 @@ def authenticate_user(
         raise InvalidCredentialsError
 
     if not user.is_active:
-        raise InvalidCredentialsError
+        raise AccountDeactivatedError
 
     return user
 

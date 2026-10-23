@@ -9,6 +9,9 @@ from app.core.security import create_access_token
 from app.models.session import UserSession
 from app.models.user import User
 from app.schemas.user import (
+    AccountPasswordRequest,
+    AccountReactivationConfirmRequest,
+    AccountReactivationRequest,
     LoginRequest,
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
@@ -18,7 +21,13 @@ from app.schemas.user import (
     UserProfileUpdate,
     UserRead,
 )
+from app.services.account import (
+    AccountPasswordIncorrectError,
+    deactivate_account,
+    delete_account,
+)
 from app.services.auth import (
+    AccountDeactivatedError,
     CurrentPasswordIncorrectError,
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
@@ -29,6 +38,11 @@ from app.services.auth import (
     register_user,
     reset_password,
     update_profile,
+)
+from app.services.reactivation import (
+    InvalidReactivationTokenError,
+    create_reactivation_token,
+    reactivate_account,
 )
 from app.services.sessions import (
     create_session,
@@ -118,6 +132,11 @@ def login(
             email=str(login_data.email),
             password=login_data.password,
         )
+    except AccountDeactivatedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is temporarily deactivated",
+        ) from None
     except InvalidCredentialsError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -144,6 +163,49 @@ def get_me(current_user: CurrentUser) -> UserRead:
     return UserRead.model_validate(current_user)
 
 
+@router.post(
+    "/reactivation/request",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def request_account_reactivation(
+    reactivation_data: AccountReactivationRequest,
+    db: DbSession,
+) -> None:
+    user = db.scalar(
+        select(User).where(User.email == str(reactivation_data.email).strip().lower())
+    )
+    if user is not None and not user.is_active:
+        settings = get_settings()
+        raw_token = create_reactivation_token(
+            db,
+            user=user,
+            expires_minutes=settings.account_reactivation_token_expire_minutes,
+            rate_limit_count=settings.account_reactivation_rate_limit_count,
+            rate_limit_window_minutes=(
+                settings.account_reactivation_rate_limit_window_minutes
+            ),
+        )
+        if raw_token is not None:
+            logger.info("Account reactivation email queued for %s", user.email)
+
+
+@router.post(
+    "/reactivation/confirm",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def confirm_account_reactivation(
+    reactivation_data: AccountReactivationConfirmRequest,
+    db: DbSession,
+) -> None:
+    try:
+        reactivate_account(db, raw_token=reactivation_data.token)
+    except InvalidReactivationTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired account reactivation token",
+        ) from None
+
+
 @router.patch(
     "/profile",
     response_model=UserRead,
@@ -156,6 +218,42 @@ def update_profile_endpoint(
 ) -> UserRead:
     user = update_profile(db=db, user=current_user, profile_data=profile_data)
     return UserRead.model_validate(user)
+
+
+@router.post(
+    "/deactivate",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def deactivate_account_endpoint(
+    account_data: AccountPasswordRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    try:
+        deactivate_account(db, current_user, account_data.password)
+    except AccountPasswordIncorrectError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is incorrect",
+        ) from None
+
+
+@router.delete(
+    "/account",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_account_endpoint(
+    account_data: AccountPasswordRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    try:
+        delete_account(db, current_user, account_data.password)
+    except AccountPasswordIncorrectError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is incorrect",
+        ) from None
 
 
 @router.post(

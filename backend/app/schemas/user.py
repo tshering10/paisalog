@@ -74,8 +74,20 @@ class PasswordChangeRequest(BaseModel):
         return self
 
 
+class AccountPasswordRequest(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+
+
+class AccountReactivationRequest(BaseModel):
+    email: EmailStr
+
+
+class AccountReactivationConfirmRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
 
 
 class PasswordResetConfirmRequest(BaseModel):

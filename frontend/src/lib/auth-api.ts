@@ -117,3 +117,31 @@ export function revokeOtherSessions(): Promise<void> {
     method: "POST",
   });
 }
+
+export function deactivateAccount(password: string): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/deactivate", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function deleteAccount(password: string): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/account", {
+    method: "DELETE",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function requestAccountReactivation(email: string): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/reactivation/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmAccountReactivation(token: string): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/reactivation/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}

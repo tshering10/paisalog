@@ -47,6 +47,18 @@ class Settings(BaseSettings):
         default=15,
         validation_alias="PASSWORD_RESET_RATE_LIMIT_WINDOW_MINUTES",
     )
+    account_reactivation_token_expire_minutes: int = Field(
+        default=30,
+        validation_alias="ACCOUNT_REACTIVATION_TOKEN_EXPIRE_MINUTES",
+    )
+    account_reactivation_rate_limit_count: int = Field(
+        default=3,
+        validation_alias="ACCOUNT_REACTIVATION_RATE_LIMIT_COUNT",
+    )
+    account_reactivation_rate_limit_window_minutes: int = Field(
+        default=15,
+        validation_alias="ACCOUNT_REACTIVATION_RATE_LIMIT_WINDOW_MINUTES",
+    )
     frontend_url: str = Field(
         default="http://localhost:3000",
         validation_alias="FRONTEND_URL",

@@ -14,6 +14,9 @@ from app.schemas.transaction import (
     TransactionUpdate,
 )
 from app.schemas.user import (
+    AccountPasswordRequest,
+    AccountReactivationConfirmRequest,
+    AccountReactivationRequest,
     LoginRequest,
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
@@ -25,6 +28,9 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    "AccountPasswordRequest",
+    "AccountReactivationConfirmRequest",
+    "AccountReactivationRequest",
     "CategoryCreate",
     "CategoryRead",
     "CategorySummary",

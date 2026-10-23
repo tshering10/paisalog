@@ -3,8 +3,15 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
+from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.models.user import User
+from app.services.reactivation import (
+    InvalidReactivationTokenError,
+    create_reactivation_token,
+    reactivate_account,
+)
 
 REGISTER_PAYLOAD = {
     "email": "User1@Example.com",
@@ -249,6 +256,140 @@ def test_logout_revokes_current_session(client):
 
     assert logout_response.status_code == 204
     assert sessions_response.status_code == 401
+
+
+def test_deactivate_account_requires_correct_password(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.post(
+        "/api/v1/auth/deactivate",
+        json={"password": "wrong-password"},
+    )
+
+    assert response.status_code == 400
+    assert client.get("/api/v1/auth/me").status_code == 200
+
+
+def test_deactivate_account_blocks_current_session_and_login(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.post(
+        "/api/v1/auth/deactivate",
+        json={"password": "password123"},
+    )
+
+    assert response.status_code == 204
+    assert client.get("/api/v1/auth/me").status_code == 401
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user1@example.com", "password": "password123"},
+    )
+    assert login_response.status_code == 403
+    assert login_response.json() == {
+        "detail": "Your account is temporarily deactivated"
+    }
+
+
+def test_deactivated_account_with_wrong_password_has_invalid_credentials_error(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post("/api/v1/auth/deactivate", json={"password": "password123"})
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user1@example.com", "password": "wrong-password"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid email or password"}
+
+
+def test_reactivation_token_reactivates_account_and_is_single_use(client, db_session):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post("/api/v1/auth/deactivate", json={"password": "password123"})
+    user = db_session.scalar(select(User).where(User.email == "user1@example.com"))
+
+    token = create_reactivation_token(
+        db_session,
+        user=user,
+        expires_minutes=30,
+        rate_limit_count=3,
+        rate_limit_window_minutes=15,
+    )
+    assert token is not None
+
+    reactivate_account(db_session, raw_token=token)
+
+    assert db_session.get(User, user.id).is_active is True
+    with pytest.raises(InvalidReactivationTokenError):
+        reactivate_account(db_session, raw_token=token)
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user1@example.com", "password": "password123"},
+    )
+    assert login_response.status_code == 200
+
+
+def test_reactivation_request_is_generic_and_rate_limited(client):
+    unknown_response = client.post(
+        "/api/v1/auth/reactivation/request",
+        json={"email": "missing@example.com"},
+    )
+    assert unknown_response.status_code == 202
+
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    client.post("/api/v1/auth/deactivate", json={"password": "password123"})
+    for _ in range(3):
+        response = client.post(
+            "/api/v1/auth/reactivation/request",
+            json={"email": "user1@example.com"},
+        )
+        assert response.status_code == 202
+
+
+def test_reactivation_rejects_active_account_token_request(client, db_session):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    user = db_session.scalar(select(User).where(User.email == "user1@example.com"))
+
+    token = create_reactivation_token(
+        db_session,
+        user=user,
+        expires_minutes=30,
+        rate_limit_count=3,
+        rate_limit_window_minutes=15,
+    )
+
+    assert token is None
+
+
+def test_delete_account_removes_user_and_owned_data(client, db_session):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    user_id = db_session.execute(
+        select(User.id).where(User.email == "user1@example.com")
+    ).scalar_one()
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/auth/account",
+        json={"password": "password123"},
+    )
+
+    assert response.status_code == 204
+    assert db_session.get(User, user_id) is None
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_delete_account_requires_correct_password(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/auth/account",
+        json={"password": "wrong-password"},
+    )
+
+    assert response.status_code == 400
+    assert client.get("/api/v1/auth/me").status_code == 200
 
 
 def test_user_can_revoke_another_session(client):

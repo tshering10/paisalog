@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { ArrowRight, CircleDollarSign, Eye, EyeOff } from "lucide-react";
 import { ApiError } from "@/lib/api";
-import { login } from "@/lib/auth-api";
+import { login, requestAccountReactivation } from "@/lib/auth-api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,12 +13,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [showReactivation, setShowReactivation] = useState(false);
+  const [reactivationSent, setReactivationSent] = useState(false);
+  const [isRequestingReactivation, setIsRequestingReactivation] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setShowReactivation(false);
+    setReactivationSent(false);
     setFieldErrors({});
     setIsSubmitting(true);
 
@@ -28,16 +33,39 @@ export default function LoginPage() {
     } catch (caughtError) {
       if (caughtError instanceof ApiError) {
         setFieldErrors(caughtError.fieldErrors);
-        setError(
-          caughtError.status === 401
-            ? "Incorrect email or password."
-            : caughtError.message,
-        );
+        if (caughtError.status === 403) {
+          setShowReactivation(true);
+          setError("Your account is temporarily deactivated.");
+        } else {
+          setError(
+            caughtError.status === 401
+              ? "Incorrect email or password."
+              : caughtError.message,
+          );
+        }
       } else {
         setError("We could not connect to PaisaLog. Please try again.");
       }
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleReactivationRequest() {
+    setIsRequestingReactivation(true);
+    setError("");
+
+    try {
+      await requestAccountReactivation(email);
+      setReactivationSent(true);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : "We could not send the reactivation link. Please try again.",
+      );
+    } finally {
+      setIsRequestingReactivation(false);
     }
   }
 
@@ -69,6 +97,33 @@ export default function LoginPage() {
           role="alert"
         >
           {error}
+        </div>
+      )}
+
+      {showReactivation && !reactivationSent && (
+        <div className="mb-6 rounded-control border border-border bg-surface px-4 py-4 text-sm leading-6 text-text-muted">
+          <p>
+            Want to start using PaisaLog again? We can send you a secure
+            reactivation link.
+          </p>
+          <button
+            className="mt-3 font-semibold text-primary hover:text-primary-hover disabled:opacity-60"
+            type="button"
+            onClick={() => void handleReactivationRequest()}
+            disabled={isRequestingReactivation}
+          >
+            {isRequestingReactivation ? "Sending..." : "Send reactivation link"}
+          </button>
+        </div>
+      )}
+
+      {reactivationSent && (
+        <div
+          className="mb-6 rounded-control bg-income-tint px-4 py-3 text-sm leading-6 text-income-strong"
+          role="status"
+        >
+          If a deactivated account exists for that email, a reactivation link
+          has been sent.
         </div>
       )}
 

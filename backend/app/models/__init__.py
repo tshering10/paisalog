@@ -4,4 +4,12 @@ from app.models.session import UserSession
 from app.models.transaction import Transaction
 from app.models.user import User
 
-__all__ = ["Category", "PasswordResetToken", "Transaction", "User", "UserSession"]
+__all__ = [
+    "AccountActionToken",
+    "Category",
+    "PasswordResetToken",
+    "Transaction",
+    "User",
+    "UserSession",
+]
+from app.models.account_action_token import AccountActionToken
