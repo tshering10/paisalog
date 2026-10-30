@@ -545,7 +545,7 @@ def test_password_reset_request_is_rate_limited(client, caplog):
     assert "Password reset link" not in caplog.text
 
 
-def test_password_reset_changes_password_and_token_is_single_use(client, caplog):
+def test_password_reset_changes_password_and_token_is_single_use(client, sent_emails):
     client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
 
     request_response = client.post(
@@ -554,7 +554,10 @@ def test_password_reset_changes_password_and_token_is_single_use(client, caplog)
     )
 
     assert request_response.status_code == 202
-    match = re.search(r"reset-password\?token=([A-Za-z0-9_-]+)", caplog.text)
+    match = re.search(
+        r"reset-password\?token=([A-Za-z0-9_-]+)",
+        sent_emails[0]["text_body"],
+    )
     assert match is not None
     token = match.group(1)
 
@@ -599,14 +602,17 @@ def test_password_reset_changes_password_and_token_is_single_use(client, caplog)
     assert reused_token_response.status_code == 400
 
 
-def test_password_reset_rejects_mismatched_passwords(client, caplog):
+def test_password_reset_rejects_mismatched_passwords(client, sent_emails):
     client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
     client.post(
         "/api/v1/auth/password-reset/request",
         json={"email": "user1@example.com"},
     )
 
-    match = re.search(r"reset-password\?token=([A-Za-z0-9_-]+)", caplog.text)
+    match = re.search(
+        r"reset-password\?token=([A-Za-z0-9_-]+)",
+        sent_emails[0]["text_body"],
+    )
     assert match is not None
 
     response = client.post(

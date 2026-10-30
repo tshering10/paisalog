@@ -63,6 +63,15 @@ class Settings(BaseSettings):
         default="http://localhost:3000",
         validation_alias="FRONTEND_URL",
     )
+    smtp_host: str = Field(default="localhost", validation_alias="SMTP_HOST")
+    smtp_port: int = Field(default=1025, validation_alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, validation_alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, validation_alias="SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(default=False, validation_alias="SMTP_USE_TLS")
+    email_from: str = Field(
+        default="noreply@paisalog.local",
+        validation_alias="EMAIL_FROM",
+    )
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

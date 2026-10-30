@@ -43,3 +43,23 @@ def client(db_session):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def sent_emails(monkeypatch):
+    emails = []
+
+    def fake_send_email(settings, *, recipient, subject, text_body):
+        emails.append(
+            {
+                "recipient": recipient,
+                "subject": subject,
+                "text_body": text_body,
+            }
+        )
+
+    monkeypatch.setattr(
+        "app.api.routers.endpoints.auth.send_email",
+        fake_send_email,
+    )
+    return emails

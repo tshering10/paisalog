@@ -2,14 +2,19 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    UV_HTTP_TIMEOUT=120
 
 WORKDIR /app
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 COPY pyproject.toml uv.lock ./
 
-RUN pip install --no-cache-dir uv \
-    && uv sync --frozen --no-dev
+# Persist package wheel cache across builds
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
 
 COPY app ./app
 COPY scripts ./scripts

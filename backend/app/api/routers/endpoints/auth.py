@@ -39,6 +39,7 @@ from app.services.auth import (
     reset_password,
     update_profile,
 )
+from app.services.email import EmailDeliveryError, send_email
 from app.services.reactivation import (
     InvalidReactivationTokenError,
     create_reactivation_token,
@@ -186,7 +187,25 @@ def request_account_reactivation(
             ),
         )
         if raw_token is not None:
-            logger.info("Account reactivation email queued for %s", user.email)
+            reactivation_url = (
+                f"{settings.frontend_url.rstrip('/')}/reactivate-account/confirm"
+                f"?token={raw_token}"
+            )
+            try:
+                send_email(
+                    settings,
+                    recipient=user.email,
+                    subject="Reactivate your PaisaLog account",
+                    text_body=(
+                        "We received a request to reactivate your PaisaLog account.\n\n"
+                        f"Open this secure link to continue:\n{reactivation_url}\n\n"
+                        "This link expires in "
+                        f"{settings.account_reactivation_token_expire_minutes} minutes "
+                        "and can be used only once."
+                    ),
+                )
+            except EmailDeliveryError:
+                logger.exception("Could not deliver account reactivation email")
 
 
 @router.post(
@@ -374,7 +393,19 @@ def request_password_reset(
         reset_url = (
             f"{settings.frontend_url.rstrip('/')}/reset-password?token={raw_token}"
         )
-        logger.warning("Password reset link for %s: %s", user.email, reset_url)
+        try:
+            send_email(
+                settings,
+                recipient=user.email,
+                subject="Reset your PaisaLog password",
+                text_body=(
+                    "We received a request to reset your PaisaLog password.\n\n"
+                    f"Open this secure link to continue:\n{reset_url}\n\n"
+                    "If you did not request this, you can ignore this email."
+                ),
+            )
+        except EmailDeliveryError:
+            logger.exception("Could not deliver password reset email")
 
 
 @router.post(
