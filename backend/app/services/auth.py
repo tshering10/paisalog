@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,12 @@ class InvalidPasswordResetTokenError(Exception):
 def register_user(db: Session, user_data: UserCreate) -> User:
     normalized_email = str(user_data.email).strip().lower()
 
-    existing_user = db.scalar(select(User).where(User.email == normalized_email))
+    existing_user = db.scalar(
+        select(User).where(
+            (func.lower(User.email) == normalized_email)
+            | (func.lower(User.pending_email) == normalized_email)
+        )
+    )
 
     if existing_user is not None:
         raise EmailAlreadyRegisteredError
@@ -46,6 +51,7 @@ def register_user(db: Session, user_data: UserCreate) -> User:
         full_name=user_data.full_name.strip(),
         hashed_password=hash_password(user_data.password),
         is_active=True,
+        email_verified_at=None,
     )
 
     db.add(user)

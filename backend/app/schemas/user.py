@@ -102,6 +102,23 @@ class PasswordResetConfirmRequest(BaseModel):
         return self
 
 
+class EmailVerificationConfirmRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
+
+
+class EmailVerificationResendRequest(BaseModel):
+    email: EmailStr | None = None
+
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class EmailChangeConfirmRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
+
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,6 +126,9 @@ class UserRead(BaseModel):
     email: EmailStr
     full_name: str
     is_active: bool
+    email_verified_at: datetime | None = None
+    is_verified: bool = False
+    pending_email: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { type FormEvent, Suspense, useState } from "react";
 import { ArrowRight, CircleDollarSign, Eye, EyeOff } from "lucide-react";
 import { ApiError } from "@/lib/api";
-import { login, requestAccountReactivation } from "@/lib/auth-api";
+import { login, requestAccountReactivation, resendVerificationEmail } from "@/lib/auth-api";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isVerifiedSuccess = searchParams.get("verified") === "success";
+  const isReactivatedSuccess = searchParams.get("reactivated") === "success";
+  const isResetSuccess = searchParams.get("reset") === "success";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -16,6 +21,9 @@ export default function LoginPage() {
   const [showReactivation, setShowReactivation] = useState(false);
   const [reactivationSent, setReactivationSent] = useState(false);
   const [isRequestingReactivation, setIsRequestingReactivation] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [isRequestingVerification, setIsRequestingVerification] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -24,6 +32,8 @@ export default function LoginPage() {
     setError("");
     setShowReactivation(false);
     setReactivationSent(false);
+    setShowVerification(false);
+    setVerificationSent(false);
     setFieldErrors({});
     setIsSubmitting(true);
 
@@ -34,8 +44,13 @@ export default function LoginPage() {
       if (caughtError instanceof ApiError) {
         setFieldErrors(caughtError.fieldErrors);
         if (caughtError.status === 403) {
-          setShowReactivation(true);
-          setError("Your account is temporarily deactivated.");
+          if (caughtError.message.toLowerCase().includes("deactivated")) {
+            setShowReactivation(true);
+            setError("Your account is temporarily deactivated.");
+          } else {
+            setShowVerification(true);
+            setError("Your email address is not verified.");
+          }
         } else {
           setError(
             caughtError.status === 401
@@ -69,6 +84,24 @@ export default function LoginPage() {
     }
   }
 
+  async function handleVerificationRequest() {
+    setIsRequestingVerification(true);
+    setError("");
+
+    try {
+      await resendVerificationEmail(email);
+      setVerificationSent(true);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : "We could not send the verification link. Please try again.",
+      );
+    } finally {
+      setIsRequestingVerification(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-10 lg:hidden">
@@ -90,6 +123,33 @@ export default function LoginPage() {
           Continue tracking your money with clarity.
         </p>
       </div>
+
+      {isVerifiedSuccess && (
+        <div
+          className="mb-6 rounded-control bg-income-tint px-4 py-3 text-sm leading-6 text-income-strong"
+          role="status"
+        >
+          Your email has been verified successfully. You can now log in.
+        </div>
+      )}
+
+      {isReactivatedSuccess && (
+        <div
+          className="mb-6 rounded-control bg-income-tint px-4 py-3 text-sm leading-6 text-income-strong"
+          role="status"
+        >
+          Your account has been reactivated. You can now log in.
+        </div>
+      )}
+
+      {isResetSuccess && (
+        <div
+          className="mb-6 rounded-control bg-income-tint px-4 py-3 text-sm leading-6 text-income-strong"
+          role="status"
+        >
+          Your password has been reset successfully. Please log in with your new password.
+        </div>
+      )}
 
       {error && (
         <div
@@ -124,6 +184,31 @@ export default function LoginPage() {
         >
           If a deactivated account exists for that email, a reactivation link
           has been sent.
+        </div>
+      )}
+
+      {showVerification && !verificationSent && (
+        <div className="mb-6 rounded-control border border-border bg-surface px-4 py-4 text-sm leading-6 text-text-muted">
+          <p>
+            Your email address is unverified. We can send a new verification link to your email.
+          </p>
+          <button
+            className="mt-3 font-semibold text-primary hover:text-primary-hover disabled:opacity-60"
+            type="button"
+            onClick={() => void handleVerificationRequest()}
+            disabled={isRequestingVerification}
+          >
+            {isRequestingVerification ? "Sending..." : "Resend verification link"}
+          </button>
+        </div>
+      )}
+
+      {verificationSent && (
+        <div
+          className="mb-6 rounded-control bg-income-tint px-4 py-3 text-sm leading-6 text-income-strong"
+          role="status"
+        >
+          If an unverified account exists for that email, a verification link has been sent.
         </div>
       )}
 
@@ -203,5 +288,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-text-muted">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

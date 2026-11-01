@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import DbSession, VerifiedCurrentUser
 from app.schemas.common import Page
 from app.schemas.transaction import (
     TransactionCreate,
@@ -12,8 +12,8 @@ from app.schemas.transaction import (
     TransactionUpdate,
 )
 from app.services.transactions import (
-    InvalidTransactionFilterError,
     InvalidTransactionCategoryError,
+    InvalidTransactionFilterError,
     TransactionNotFoundError,
     create_transaction,
     delete_transaction,
@@ -21,7 +21,6 @@ from app.services.transactions import (
     list_transactions,
     update_transaction,
 )
-
 
 router = APIRouter(
     prefix="/api/v1/transactions",
@@ -37,7 +36,7 @@ router = APIRouter(
 )
 def create_transaction_endpoint(
     transaction_data: TransactionCreate,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> TransactionRead:
     try:
@@ -70,7 +69,7 @@ def create_transaction_endpoint(
     summary="List the user's transactions",
 )
 def list_transaction_endpoint(
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -113,7 +112,7 @@ def list_transaction_endpoint(
 )
 def get_transaction_endpoint(
     transaction_id: int,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> TransactionRead:
     try:
@@ -139,7 +138,7 @@ def get_transaction_endpoint(
 def update_transaction_endpoint(
     transaction_id: int,
     transaction_data: TransactionUpdate,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> TransactionRead:
     try:
@@ -170,7 +169,7 @@ def update_transaction_endpoint(
 )
 def delete_transaction_endpoint(
     transaction_id: int,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> None:
     try:

@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { ArrowRight, CircleDollarSign, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, CircleDollarSign, Eye, EyeOff, Mail } from "lucide-react";
 import { ApiError } from "@/lib/api";
-import { register } from "@/lib/auth-api";
+import { register, resendVerificationEmail } from "@/lib/auth-api";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,6 +14,9 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,7 +26,7 @@ export default function RegisterPage() {
 
     try {
       await register({ full_name: fullName, email, password });
-      router.push("/dashboard");
+      setRegisteredEmail(email);
     } catch (caughtError) {
       if (caughtError instanceof ApiError) {
         setFieldErrors(caughtError.fieldErrors);
@@ -40,6 +41,85 @@ export default function RegisterPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleResend() {
+    if (!registeredEmail) return;
+    setResending(true);
+    setResendStatus("");
+    try {
+      await resendVerificationEmail(registeredEmail);
+      setResendStatus("A new verification link has been sent to your email.");
+    } catch {
+      setResendStatus("We could not send the link right now. Please try again shortly.");
+    } finally {
+      setResending(false);
+    }
+  }
+
+  if (registeredEmail) {
+    return (
+      <div>
+        <div className="mb-10 lg:hidden">
+          <div className="bg-hero -mx-6 -mt-12 px-6 py-8 text-white sm:-mx-10 sm:px-10">
+            <div className="flex items-center gap-2 text-xl font-bold">
+              <CircleDollarSign className="size-8 text-cyan-200" aria-hidden="true" />
+              <span>PaisaLog</span>
+            </div>
+            <p className="mt-4 text-sm text-indigo-100">Log every paisa.</p>
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <div className="mb-4 inline-flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Mail className="size-6" aria-hidden="true" />
+          </div>
+          <p className="text-sm font-semibold text-primary">Account created</p>
+          <h1 className="mt-2 font-heading text-3xl font-bold text-text">
+            Check your email
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-text-muted">
+            We sent a verification link to{" "}
+            <span className="font-semibold text-text">{registeredEmail}</span>.
+            Please verify your email address to unlock all financial tracking features.
+          </p>
+        </div>
+
+        {resendStatus && (
+          <div
+            className="mb-6 rounded-control bg-income-tint px-4 py-3 text-sm text-income-strong"
+            role="status"
+          >
+            {resendStatus}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <button
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-primary px-5 font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+            type="button"
+            onClick={() => void handleResend()}
+            disabled={resending}
+          >
+            {resending ? "Sending..." : "Resend verification email"}
+          </button>
+
+          <Link
+            className="flex h-11 w-full items-center justify-center rounded-control border border-border bg-surface px-5 font-semibold text-text transition hover:bg-surface-muted"
+            href="/dashboard"
+          >
+            Continue to dashboard
+          </Link>
+        </div>
+
+        <p className="mt-8 text-center text-sm text-text-muted">
+          Need to use another account?{" "}
+          <Link className="font-semibold text-primary hover:text-primary-hover" href="/login">
+            Log in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (

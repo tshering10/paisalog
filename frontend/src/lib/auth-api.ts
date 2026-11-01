@@ -5,6 +5,9 @@ export type User = {
   email: string;
   full_name: string;
   is_active: boolean;
+  email_verified_at: string | null;
+  is_verified: boolean;
+  pending_email: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -145,3 +148,37 @@ export function confirmAccountReactivation(token: string): Promise<void> {
     body: JSON.stringify({ token }),
   });
 }
+
+export function verifyEmail(token: string): Promise<User> {
+  return apiRequest<User>("/api/v1/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function resendVerificationEmail(email?: string): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/verify-email/resend", {
+    method: "POST",
+    body: JSON.stringify(email ? { email } : {}),
+  });
+}
+
+export type EmailChangeInput = {
+  new_email: string;
+  password: string;
+};
+
+export function requestEmailChange(input: EmailChangeInput): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/email-change/request", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function confirmEmailChange(token: string): Promise<User> {
+  return apiRequest<User>("/api/v1/auth/email-change/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+

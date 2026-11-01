@@ -64,6 +64,34 @@ class User(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    pending_email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    email_verification_request_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    email_verification_request_window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    email_change_request_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    email_change_request_window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -92,10 +120,18 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def is_verified(self) -> bool:
+        return self.email_verified_at is not None
+
     __table_args__ = (
         Index(
             "uq_users_email_lower",
             func.lower(email),
             unique=True,
+        ),
+        Index(
+            "ix_users_pending_email_lower",
+            func.lower(pending_email),
         ),
     )

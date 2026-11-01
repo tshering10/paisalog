@@ -30,6 +30,8 @@ def test_register_returns_safe_user(client):
     assert body["email"] == "user1@example.com"
     assert body["full_name"] == "Test User"
     assert body["is_active"] is True
+    assert body["is_verified"] is False
+    assert body["email_verified_at"] is None
     assert "password" not in body
     assert "hashed_password" not in body
 
@@ -37,6 +39,7 @@ def test_register_returns_safe_user(client):
 
     assert me_response.status_code == 200
     assert me_response.json()["email"] == "user1@example.com"
+    assert me_response.json()["is_verified"] is False
 
 
 def test_duplicate_email_is_case_insensitive(client):
@@ -556,7 +559,7 @@ def test_password_reset_changes_password_and_token_is_single_use(client, sent_em
     assert request_response.status_code == 202
     match = re.search(
         r"reset-password\?token=([A-Za-z0-9_-]+)",
-        sent_emails[0]["text_body"],
+        sent_emails[-1]["text_body"],
     )
     assert match is not None
     token = match.group(1)
@@ -611,7 +614,7 @@ def test_password_reset_rejects_mismatched_passwords(client, sent_emails):
 
     match = re.search(
         r"reset-password\?token=([A-Za-z0-9_-]+)",
-        sent_emails[0]["text_body"],
+        sent_emails[-1]["text_body"],
     )
     assert match is not None
 
@@ -625,3 +628,167 @@ def test_password_reset_rejects_mismatched_passwords(client, sent_emails):
     )
 
     assert response.status_code == 422
+
+
+def test_register_sends_verification_email_and_starts_unverified(client, sent_emails):
+    response = client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["is_verified"] is False
+    assert data["email_verified_at"] is None
+
+    assert len(sent_emails) == 1
+    assert sent_emails[0]["recipient"] == "user1@example.com"
+    assert "Verify your PaisaLog email" in sent_emails[0]["subject"]
+    assert "verify-email?token=" in sent_emails[0]["text_body"]
+
+
+def test_unverified_user_can_login_and_access_me(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    login_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user1@example.com", "password": "password123"},
+    )
+    assert login_resp.status_code == 200
+    assert login_resp.json()["is_verified"] is False
+
+    me_resp = client.get("/api/v1/auth/me")
+    assert me_resp.status_code == 200
+    assert me_resp.json()["is_verified"] is False
+
+
+def test_unverified_user_blocked_from_protected_features(client):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    cat_resp = client.get("/api/v1/categories")
+    assert cat_resp.status_code == 403
+    assert cat_resp.json()["detail"] == "Email verification required"
+
+    tx_resp = client.get("/api/v1/transactions")
+    assert tx_resp.status_code == 403
+    assert tx_resp.json()["detail"] == "Email verification required"
+
+    analytics_resp = client.get("/api/v1/analytics/summary?year=2026&month=10")
+    assert analytics_resp.status_code == 403
+    assert analytics_resp.json()["detail"] == "Email verification required"
+
+
+def test_verify_email_success_unlocks_protected_features(client, sent_emails):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    match = re.search(r"verify-email\?token=([A-Za-z0-9_-]+)", sent_emails[0]["text_body"])
+    assert match is not None
+    token = match.group(1)
+
+    verify_resp = client.post("/api/v1/auth/verify-email", json={"token": token})
+    assert verify_resp.status_code == 200
+    data = verify_resp.json()
+    assert data["is_verified"] is True
+    assert data["email_verified_at"] is not None
+
+    cat_resp = client.get("/api/v1/categories")
+    assert cat_resp.status_code == 200
+
+
+def test_verify_email_rejects_invalid_token(client):
+    response = client.post("/api/v1/auth/verify-email", json={"token": "invalid-token"})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid or expired email verification token"
+
+
+def test_resend_verification_email_rate_limit(client, sent_emails):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    assert len(sent_emails) == 1
+
+    # Request 1
+    resp1 = client.post("/api/v1/auth/verify-email/resend", json={"email": "user1@example.com"})
+    assert resp1.status_code == 202
+    assert len(sent_emails) == 2
+
+    # Request 2
+    resp2 = client.post("/api/v1/auth/verify-email/resend", json={"email": "user1@example.com"})
+    assert resp2.status_code == 202
+    assert len(sent_emails) == 3
+
+    # Request 3 - should hit rate limit (max 3 tokens allowed per window: initial register + 2 resends = 3)
+    resp3 = client.post("/api/v1/auth/verify-email/resend", json={"email": "user1@example.com"})
+    assert resp3.status_code == 202
+    # No new email sent due to rate limit
+    assert len(sent_emails) == 3
+
+
+def test_email_change_flow(client, sent_emails):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    match = re.search(r"verify-email\?token=([A-Za-z0-9_-]+)", sent_emails[0]["text_body"])
+    client.post("/api/v1/auth/verify-email", json={"token": match.group(1)})
+
+    # Request email change
+    change_req = client.post(
+        "/api/v1/auth/email-change/request",
+        json={"new_email": "newuser@example.com", "password": "password123"},
+    )
+    assert change_req.status_code == 202
+
+    me_resp = client.get("/api/v1/auth/me")
+    assert me_resp.json()["email"] == "user1@example.com"
+    assert me_resp.json()["pending_email"] == "newuser@example.com"
+
+    # Email sent to new address
+    assert sent_emails[-1]["recipient"] == "newuser@example.com"
+    change_match = re.search(r"verify-email-change\?token=([A-Za-z0-9_-]+)", sent_emails[-1]["text_body"])
+    assert change_match is not None
+    change_token = change_match.group(1)
+
+    # Confirm email change
+    confirm_resp = client.post(
+        "/api/v1/auth/email-change/confirm",
+        json={"token": change_token},
+    )
+    assert confirm_resp.status_code == 200
+    confirm_data = confirm_resp.json()
+    assert confirm_data["email"] == "newuser@example.com"
+    assert confirm_data["pending_email"] is None
+    assert confirm_data["is_verified"] is True
+
+
+def test_email_change_rejects_wrong_password_or_same_email(client, sent_emails):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    match = re.search(r"verify-email\?token=([A-Za-z0-9_-]+)", sent_emails[0]["text_body"])
+    client.post("/api/v1/auth/verify-email", json={"token": match.group(1)})
+
+    # Wrong password
+    wrong_pwd = client.post(
+        "/api/v1/auth/email-change/request",
+        json={"new_email": "newuser@example.com", "password": "wrongpassword"},
+    )
+    assert wrong_pwd.status_code == 400
+    assert wrong_pwd.json()["detail"] == "Password is incorrect"
+
+    # Same email
+    same_email = client.post(
+        "/api/v1/auth/email-change/request",
+        json={"new_email": "user1@example.com", "password": "password123"},
+    )
+    assert same_email.status_code == 400
+    assert same_email.json()["detail"] == "New email must be different from current email"
+
+
+def test_email_change_rejects_duplicate_email(client, sent_emails):
+    client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    match1 = re.search(r"verify-email\?token=([A-Za-z0-9_-]+)", sent_emails[0]["text_body"])
+    client.post("/api/v1/auth/verify-email", json={"token": match1.group(1)})
+
+    # Create second user
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "second@example.com", "password": "password123", "full_name": "Second User"},
+    )
+
+    # Log in as first user
+    client.post("/api/v1/auth/login", json={"email": "user1@example.com", "password": "password123"})
+
+    dup_resp = client.post(
+        "/api/v1/auth/email-change/request",
+        json={"new_email": "second@example.com", "password": "password123"},
+    )
+    assert dup_resp.status_code == 409

@@ -2,20 +2,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import DbSession, VerifiedCurrentUser
 from app.schemas.analytics import (
     ExpenseByCategoryResponse,
     MonthlySummary,
     MonthlyTrendResponse,
 )
 from app.services.analytics import (
-    InvalidAnalyticsRangeError,
     InvalidAnalyticsPeriodError,
+    InvalidAnalyticsRangeError,
     get_expenses_by_category,
     get_monthly_summary,
     get_monthly_trend,
 )
-
 
 router = APIRouter(
     prefix="/api/v1/analytics",
@@ -29,7 +28,7 @@ router = APIRouter(
     summary="Get monthly income and expense summary",
 )
 def monthly_summary(
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
     year: Annotated[int, Query(ge=1)],
     month: Annotated[int, Query(ge=1, le=12)],
@@ -56,7 +55,7 @@ def monthly_summary(
     summary="Get monthly expenses grouped by category",
 )
 def expenses_by_category(
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
     year: Annotated[int, Query(ge=1)],
     month: Annotated[int, Query(ge=1, le=12)],
@@ -83,7 +82,7 @@ def expenses_by_category(
     summary="Get monthly income and expense trends",
 )
 def monthly_trend(
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
     year: Annotated[int, Query(ge=1)],
     month: Annotated[int, Query(ge=1, le=12)],

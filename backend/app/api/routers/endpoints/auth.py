@@ -1,17 +1,26 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.api.dependencies import CurrentSession, CurrentUser, DbSession
+from app.api.dependencies import (
+    CurrentSession,
+    CurrentUser,
+    DbSession,
+    VerifiedCurrentUser,
+)
 from app.core.config import get_settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_access_token
 from app.models.session import UserSession
 from app.models.user import User
 from app.schemas.user import (
     AccountPasswordRequest,
     AccountReactivationConfirmRequest,
     AccountReactivationRequest,
+    EmailChangeConfirmRequest,
+    EmailChangeRequest,
+    EmailVerificationConfirmRequest,
+    EmailVerificationResendRequest,
     LoginRequest,
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
@@ -50,6 +59,17 @@ from app.services.sessions import (
     list_active_sessions,
     revoke_other_sessions,
     revoke_session,
+)
+from app.services.verification import (
+    EmailAlreadyInUseError,
+    EmailChangePasswordIncorrectError,
+    InvalidEmailChangeTokenError,
+    InvalidVerificationTokenError,
+    SameEmailError,
+    confirm_email_change,
+    create_email_verification_token,
+    request_email_change,
+    verify_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,10 +125,37 @@ def register(
             detail="Email is already registered",
         ) from None
 
+    settings = get_settings()
+    raw_token = create_email_verification_token(
+        db,
+        user=user,
+        expires_minutes=settings.email_verification_token_expire_minutes,
+        rate_limit_count=settings.email_verification_rate_limit_count,
+        rate_limit_window_minutes=settings.email_verification_rate_limit_window_minutes,
+    )
+    if raw_token is not None:
+        verification_url = (
+            f"{settings.frontend_url.rstrip('/')}/verify-email?token={raw_token}"
+        )
+        try:
+            send_email(
+                settings,
+                recipient=user.email,
+                subject="Verify your PaisaLog email",
+                text_body=(
+                    f"Welcome to PaisaLog, {user.full_name}!\n\n"
+                    f"Please verify your email address by opening this link:\n{verification_url}\n\n"
+                    f"This link expires in {settings.email_verification_token_expire_minutes // 60} hours "
+                    "and can be used only once."
+                ),
+            )
+        except EmailDeliveryError:
+            logger.exception("Could not deliver verification email")
+
     session = create_session(
         db,
         user_id=user.id,
-        expires_minutes=get_settings().access_token_expire_minutes,
+        expires_minutes=settings.access_token_expire_minutes,
         user_agent=request.headers.get("user-agent"),
         ip_address=request.client.host if request.client else None,
     )
@@ -162,6 +209,168 @@ def login(
 )
 def get_me(current_user: CurrentUser) -> UserRead:
     return UserRead.model_validate(current_user)
+
+
+@router.post(
+    "/verify-email",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+)
+def verify_email_endpoint(
+    verification_data: EmailVerificationConfirmRequest,
+    db: DbSession,
+) -> UserRead:
+    try:
+        user = verify_email(db, raw_token=verification_data.token)
+    except InvalidVerificationTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired email verification token",
+        ) from None
+
+    return UserRead.model_validate(user)
+
+
+@router.post(
+    "/verify-email/resend",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def resend_verification_email_endpoint(
+    data: EmailVerificationResendRequest,
+    request: Request,
+    db: DbSession,
+) -> None:
+    settings = get_settings()
+    email_to_check: str | None = None
+    if data.email:
+        email_to_check = str(data.email).strip().lower()
+    else:
+        access_token = request.cookies.get("access_token")
+        if access_token:
+            try:
+                user_id, _, _ = decode_access_token(
+                    token=access_token,
+                    secret_key=settings.secret_key,
+                )
+                user = db.get(User, user_id)
+                if user and user.is_active:
+                    email_to_check = user.email
+            except Exception:
+                pass
+
+    if not email_to_check:
+        return
+
+    user = db.scalar(
+        select(User).where(func.lower(User.email) == email_to_check)
+    )
+    if user is not None and user.is_active and user.email_verified_at is None:
+        raw_token = create_email_verification_token(
+            db,
+            user=user,
+            expires_minutes=settings.email_verification_token_expire_minutes,
+            rate_limit_count=settings.email_verification_rate_limit_count,
+            rate_limit_window_minutes=settings.email_verification_rate_limit_window_minutes,
+        )
+        if raw_token is not None:
+            verification_url = (
+                f"{settings.frontend_url.rstrip('/')}/verify-email?token={raw_token}"
+            )
+            try:
+                send_email(
+                    settings,
+                    recipient=user.email,
+                    subject="Verify your PaisaLog email",
+                    text_body=(
+                        f"Hello {user.full_name},\n\n"
+                        f"Here is your new email verification link:\n{verification_url}\n\n"
+                        f"This link expires in {settings.email_verification_token_expire_minutes // 60} hours "
+                        "and can be used only once."
+                    ),
+                )
+            except EmailDeliveryError:
+                logger.exception("Could not deliver verification email")
+
+
+@router.post(
+    "/email-change/request",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def request_email_change_endpoint(
+    change_data: EmailChangeRequest,
+    current_user: VerifiedCurrentUser,
+    db: DbSession,
+) -> None:
+    settings = get_settings()
+    try:
+        raw_token, new_email = request_email_change(
+            db,
+            user=current_user,
+            new_email=str(change_data.new_email),
+            password=change_data.password,
+            expires_minutes=settings.email_change_token_expire_minutes,
+            rate_limit_count=settings.email_change_rate_limit_count,
+            rate_limit_window_minutes=settings.email_change_rate_limit_window_minutes,
+        )
+    except EmailChangePasswordIncorrectError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is incorrect",
+        ) from None
+    except SameEmailError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New email must be different from current email",
+        ) from None
+    except EmailAlreadyInUseError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This email address is already registered or pending verification",
+        ) from None
+
+    if raw_token is not None:
+        confirm_url = (
+            f"{settings.frontend_url.rstrip('/')}/verify-email-change?token={raw_token}"
+        )
+        try:
+            send_email(
+                settings,
+                recipient=new_email,
+                subject="Confirm your new PaisaLog email address",
+                text_body=(
+                    f"Hello {current_user.full_name},\n\n"
+                    "You requested to change your PaisaLog email address to this one.\n\n"
+                    f"Please confirm this change by clicking the following link:\n{confirm_url}\n\n"
+                    f"This link expires in {settings.email_change_token_expire_minutes} minutes."
+                ),
+            )
+        except EmailDeliveryError:
+            logger.exception("Could not deliver email change confirmation email")
+
+
+@router.post(
+    "/email-change/confirm",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+)
+def confirm_email_change_endpoint(
+    confirm_data: EmailChangeConfirmRequest,
+    db: DbSession,
+) -> UserRead:
+    try:
+        user = confirm_email_change(db, raw_token=confirm_data.token)
+    except InvalidEmailChangeTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired email change token",
+        ) from None
+    except EmailAlreadyInUseError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This email address is already taken",
+        ) from None
+
+    return UserRead.model_validate(user)
 
 
 @router.post(

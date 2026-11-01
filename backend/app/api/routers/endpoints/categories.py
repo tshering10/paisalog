@@ -2,18 +2,17 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import DbSession, VerifiedCurrentUser
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.services.categories import (
-    CategoryNameConflictError,
     CategoryInUseError,
+    CategoryNameConflictError,
     CategoryNotFoundError,
     create_custom_category,
     delete_custom_category,
     list_visible_categories,
     rename_custom_category,
 )
-
 
 router = APIRouter(
     prefix="/api/v1/categories",
@@ -29,7 +28,7 @@ router = APIRouter(
 )
 def create_category(
     category_data: CategoryCreate,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> CategoryRead:
     try:
@@ -56,7 +55,7 @@ def create_category(
 def update_category(
     category_id: int,
     category_data: CategoryUpdate,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> CategoryRead:
     try:
@@ -87,7 +86,7 @@ def update_category(
 )
 def delete_category(
     category_id: int,
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
 ) -> None:
     try:
@@ -114,7 +113,7 @@ def delete_category(
     summary="List visible categories",
 )
 def list_categories(
-    current_user: CurrentUser,
+    current_user: VerifiedCurrentUser,
     db: DbSession,
     category_type: Annotated[
         Literal["income", "expense"] | None,

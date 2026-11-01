@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
       {submitted ? (
         <div className="rounded-control bg-income-tint px-4 py-4 text-sm leading-6 text-income-strong" role="status">
           If an account exists for that email, a password reset link has been sent.
-          Check your inbox or the development API logs.
+          Check your inbox.
         </div>
       ) : (
         <form className="space-y-5" onSubmit={handleSubmit}>
