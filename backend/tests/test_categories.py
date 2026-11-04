@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.models.category import Category
 from app.models.transaction import Transaction
 from app.models.user import User
+from tests.helpers import verify_registered_user
 
 
 def register_and_login(client, email: str, full_name: str):
@@ -17,6 +18,7 @@ def register_and_login(client, email: str, full_name: str):
             "full_name": full_name,
         },
     )
+    verify_registered_user(client, email)
     return client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": "password123"},
