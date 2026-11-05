@@ -10,6 +10,7 @@ import {
   Settings,
   Tags,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -20,6 +21,7 @@ const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: BarChart3 },
   { href: "/categories", label: "Categories", icon: Tags },
+  { href: "/settings/budgets", label: "Budgets", icon: WalletCards },
   { href: "/settings/security", label: "Security", icon: Settings },
   { href: "/settings/profile", label: "Profile", icon: UserRound },
 ];

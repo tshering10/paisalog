@@ -3,6 +3,7 @@ import { io } from "next/cache";
 import { ArrowLeft, ArrowRight, CalendarDays, Plus } from "lucide-react";
 
 import { getCategories } from "@/lib/categories-api";
+import { getBudgets } from "@/lib/budgets-api";
 import {
   getExpensesByCategory,
   getMonthlySummary,
@@ -41,12 +42,13 @@ export default async function DashboardPage({
 }: DashboardPageProps) {
   await io();
   const { year, month } = parseMonth((await searchParams).month);
-  const [summary, expenses, trend, recentTransactions, categories] = await Promise.all([
+  const [summary, expenses, trend, recentTransactions, categories, budgets] = await Promise.all([
     getMonthlySummary(year, month),
     getExpensesByCategory(year, month),
     getMonthlyTrend(year, month),
     getRecentTransactions(),
     getCategories(),
+    getBudgets(year, month),
   ]);
 
   return (
@@ -124,6 +126,40 @@ export default async function DashboardPage({
           <MonthlyTrendChart months={trend.months} />
         </section>
       </div>
+
+      <section className="mt-5 rounded-card bg-surface p-6 shadow-card">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-heading text-lg font-bold text-text">Monthly budgets</h2>
+            <p className="mt-1 text-sm text-text-muted">Track your limits for {formatMonth(year, month)}.</p>
+          </div>
+          <Link className="text-sm font-semibold text-primary hover:text-primary-hover" href={`/settings/budgets?month=${year}-${String(month).padStart(2, "0")}`}>
+            Manage budgets
+          </Link>
+        </div>
+        {budgets.length > 0 ? (
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {budgets.map((budget) => {
+              const percentage = Math.min(Number(budget.percentage_used), 100);
+              return (
+                <div key={budget.id}>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="font-semibold text-text">{budget.category_name ?? "Total spending"}</span>
+                    <span className={`money ${budget.is_exceeded ? "font-semibold text-expense-strong" : "text-text-muted"}`}>
+                      {formatMoney(budget.spent)} / {formatMoney(budget.amount)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
+                    <div className={`h-full rounded-full ${budget.is_exceeded || (budget.alert_threshold ?? 0) >= 90 ? "bg-warning" : "bg-primary"}`} style={{ width: `${percentage}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-5 text-sm text-text-muted">No budgets set for this month.</p>
+        )}
+      </section>
 
       <RecentTransactions transactions={recentTransactions.items} />
     </div>

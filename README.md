@@ -25,6 +25,7 @@ PaisaLog is a full-stack personal finance tracker built with a **FastAPI** backe
 - Monthly income, expense, net, and count summaries.
 - Expense totals grouped by category.
 - Monthly income and expense trends.
+- Monthly category and total spending budgets with remaining amounts and alerts.
 
 ### Infrastructure
 - PostgreSQL database managed with SQLAlchemy and Alembic.
@@ -353,6 +354,21 @@ GET    /api/v1/analytics/summary              ?year, month
 GET    /api/v1/analytics/expenses-by-category ?year, month
 GET    /api/v1/analytics/monthly-trend        ?year, month, months (1–24)
 ```
+
+### Budgets  *(requires verified account)*
+
+```text
+POST   /api/v1/budgets                         Create a category or total budget
+GET    /api/v1/budgets                         ?year, month
+PATCH  /api/v1/budgets/{budget_id}             Update a budget amount
+DELETE /api/v1/budgets/{budget_id}             Delete a budget
+```
+
+Budget responses include the configured amount, expense spending, remaining
+amount, percentage used, and the active alert threshold. Alerts are reported at
+80%, 90%, 99%, and 100% or above. Transactions remain allowed when a budget is
+exceeded. A request without `category_id` creates the optional total monthly
+budget; category budgets must reference an accessible expense category.
 
 ---
 
