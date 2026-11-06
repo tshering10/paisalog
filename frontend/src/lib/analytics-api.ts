@@ -8,6 +8,7 @@ export type MonthlySummary = {
   expenses: string;
   net: string;
   transaction_count: number;
+  average_daily_expenses: string;
 };
 
 export type ExpenseCategoryBreakdown = {
@@ -34,6 +35,27 @@ export type MonthlyTrendItem = {
 
 export type MonthlyTrendResponse = {
   months: MonthlyTrendItem[];
+};
+
+export type CategorySpendingComparison = {
+  category_id: number;
+  category_name: string;
+  current_expenses: string;
+  previous_expenses: string;
+  absolute_change: string;
+  percentage_change: string | null;
+};
+
+export type MonthlySpendingComparison = {
+  year: number;
+  month: number;
+  previous_year: number;
+  previous_month: number;
+  current_expenses: string;
+  previous_expenses: string;
+  absolute_change: string;
+  percentage_change: string | null;
+  categories: CategorySpendingComparison[];
 };
 
 function periodQuery(year: number, month: number): string {
@@ -65,6 +87,15 @@ export function getMonthlyTrend(
 ): Promise<MonthlyTrendResponse> {
   return serverApiRequest<MonthlyTrendResponse>(
     `/api/v1/analytics/monthly-trend?${periodQuery(year, month)}&months=${months}`,
+  );
+}
+
+export function getMonthlyComparison(
+  year: number,
+  month: number,
+): Promise<MonthlySpendingComparison> {
+  return serverApiRequest<MonthlySpendingComparison>(
+    `/api/v1/analytics/monthly-comparison?${periodQuery(year, month)}`,
   );
 }
 

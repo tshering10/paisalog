@@ -23,6 +23,8 @@ PaisaLog is a full-stack personal finance tracker built with a **FastAPI** backe
 - Transaction ownership and category/type validation.
 - Transaction filtering (`type`, `category_id`, `date_from`, `date_to`) and pagination.
 - Monthly income, expense, net, and count summaries.
+- Average daily expenses using all calendar days in the selected month.
+- Monthly expense comparisons with absolute and percentage changes by category.
 - Expense totals grouped by category.
 - Monthly income and expense trends.
 - Monthly category and total spending budgets with remaining amounts and alerts.
@@ -358,6 +360,7 @@ oldest to newest. Date filters are inclusive.
 GET    /api/v1/analytics/summary              ?year, month
 GET    /api/v1/analytics/expenses-by-category ?year, month
 GET    /api/v1/analytics/monthly-trend        ?year, month, months (1–24)
+GET    /api/v1/analytics/monthly-comparison   ?year, month
 ```
 
 ### Budgets  *(requires verified account)*

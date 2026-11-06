@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.api.dependencies import DbSession, VerifiedCurrentUser
 from app.schemas.analytics import (
     ExpenseByCategoryResponse,
+    MonthlySpendingComparison,
     MonthlySummary,
     MonthlyTrendResponse,
 )
@@ -12,6 +13,7 @@ from app.services.analytics import (
     InvalidAnalyticsPeriodError,
     InvalidAnalyticsRangeError,
     get_expenses_by_category,
+    get_monthly_spending_comparison,
     get_monthly_summary,
     get_monthly_trend,
 )
@@ -103,3 +105,30 @@ def monthly_trend(
         ) from None
 
     return MonthlyTrendResponse.model_validate(trend)
+
+
+@router.get(
+    "/monthly-comparison",
+    response_model=MonthlySpendingComparison,
+    summary="Compare monthly expenses with the previous month",
+)
+def monthly_comparison(
+    current_user: VerifiedCurrentUser,
+    db: DbSession,
+    year: Annotated[int, Query(ge=1)],
+    month: Annotated[int, Query(ge=1, le=12)],
+) -> MonthlySpendingComparison:
+    try:
+        comparison = get_monthly_spending_comparison(
+            db,
+            user_id=current_user.id,
+            year=year,
+            month=month,
+        )
+    except InvalidAnalyticsPeriodError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid analytics period",
+        ) from None
+
+    return MonthlySpendingComparison.model_validate(comparison)

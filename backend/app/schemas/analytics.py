@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from pydantic import BaseModel, Field
 
 
@@ -9,6 +10,7 @@ class MonthlySummary(BaseModel):
     expenses: Decimal
     net: Decimal
     transaction_count: int
+    average_daily_expenses: Decimal
 
 
 class ExpenseCategoryBreakdown(BaseModel):
@@ -35,3 +37,24 @@ class MonthlyTrendItem(BaseModel):
 
 class MonthlyTrendResponse(BaseModel):
     months: list[MonthlyTrendItem]
+
+
+class CategorySpendingComparison(BaseModel):
+    category_id: int
+    category_name: str
+    current_expenses: Decimal
+    previous_expenses: Decimal
+    absolute_change: Decimal
+    percentage_change: Decimal | None
+
+
+class MonthlySpendingComparison(BaseModel):
+    year: int
+    month: int = Field(ge=1, le=12)
+    previous_year: int
+    previous_month: int = Field(ge=1, le=12)
+    current_expenses: Decimal
+    previous_expenses: Decimal
+    absolute_change: Decimal
+    percentage_change: Decimal | None
+    categories: list[CategorySpendingComparison]

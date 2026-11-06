@@ -32,9 +32,7 @@ def test_monthly_summary(client, db_session):
         "Analytics User",
     )
 
-    user = db_session.query(User).filter(
-        User.email == "analytics@example.com"
-    ).one()
+    user = db_session.query(User).filter(User.email == "analytics@example.com").one()
 
     expense_category = Category(
         user_id=None,
@@ -77,9 +75,7 @@ def test_monthly_summary(client, db_session):
     )
     db_session.commit()
 
-    response = client.get(
-        "/api/v1/analytics/summary?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/summary?year=2026&month=10")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -89,13 +85,12 @@ def test_monthly_summary(client, db_session):
         "expenses": "100.00",
         "net": "400.00",
         "transaction_count": 2,
+        "average_daily_expenses": "3.23",
     }
 
 
 def test_monthly_summary_requires_authentication(client):
-    response = client.get(
-        "/api/v1/analytics/summary?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/summary?year=2026&month=10")
 
     assert response.status_code == 401
 
@@ -107,9 +102,7 @@ def test_monthly_summary_has_zero_values_when_empty(client):
         "Empty Analytics User",
     )
 
-    response = client.get(
-        "/api/v1/analytics/summary?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/summary?year=2026&month=10")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -119,6 +112,7 @@ def test_monthly_summary_has_zero_values_when_empty(client):
         "expenses": "0.00",
         "net": "0.00",
         "transaction_count": 0,
+        "average_daily_expenses": "0.00",
     }
 
 
@@ -129,9 +123,7 @@ def test_monthly_summary_rejects_invalid_month(client):
         "Invalid Month User",
     )
 
-    response = client.get(
-        "/api/v1/analytics/summary?year=2026&month=13"
-    )
+    response = client.get("/api/v1/analytics/summary?year=2026&month=13")
 
     assert response.status_code == 422
 
@@ -142,9 +134,11 @@ def test_expenses_by_category(client, db_session):
         "category-analytics@example.com",
         "Category Analytics User",
     )
-    user = db_session.query(User).filter(
-        User.email == "category-analytics@example.com"
-    ).one()
+    user = (
+        db_session.query(User)
+        .filter(User.email == "category-analytics@example.com")
+        .one()
+    )
     food = Category(user_id=None, name="Food", type="expense")
     transport = Category(user_id=None, name="Transport", type="expense")
     db_session.add_all([food, transport])
@@ -176,9 +170,7 @@ def test_expenses_by_category(client, db_session):
     )
     db_session.commit()
 
-    response = client.get(
-        "/api/v1/analytics/expenses-by-category?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/expenses-by-category?year=2026&month=10")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -209,9 +201,7 @@ def test_expenses_by_category_empty_month(client):
         "Empty Category Analytics",
     )
 
-    response = client.get(
-        "/api/v1/analytics/expenses-by-category?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/expenses-by-category?year=2026&month=10")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -223,9 +213,7 @@ def test_expenses_by_category_empty_month(client):
 
 
 def test_expenses_by_category_requires_authentication(client):
-    response = client.get(
-        "/api/v1/analytics/expenses-by-category?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/expenses-by-category?year=2026&month=10")
 
     assert response.status_code == 401
 
@@ -236,9 +224,7 @@ def test_monthly_trend_returns_zero_filled_ascending_months(client, db_session):
         "trend@example.com",
         "Trend User",
     )
-    user = db_session.query(User).filter(
-        User.email == "trend@example.com"
-    ).one()
+    user = db_session.query(User).filter(User.email == "trend@example.com").one()
     category = Category(user_id=None, name="Salary", type="income")
     db_session.add(category)
     db_session.commit()
@@ -253,10 +239,7 @@ def test_monthly_trend_returns_zero_filled_ascending_months(client, db_session):
     )
     db_session.commit()
 
-    response = client.get(
-        "/api/v1/analytics/monthly-trend"
-        "?year=2026&month=10&months=3"
-    )
+    response = client.get("/api/v1/analytics/monthly-trend?year=2026&month=10&months=3")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -290,16 +273,105 @@ def test_monthly_trend_rejects_invalid_range(client):
     register_and_login(client, "trend-invalid@example.com", "Trend Invalid")
 
     response = client.get(
-        "/api/v1/analytics/monthly-trend"
-        "?year=2026&month=10&months=25"
+        "/api/v1/analytics/monthly-trend?year=2026&month=10&months=25"
     )
 
     assert response.status_code == 422
 
 
 def test_monthly_trend_requires_authentication(client):
-    response = client.get(
-        "/api/v1/analytics/monthly-trend?year=2026&month=10"
-    )
+    response = client.get("/api/v1/analytics/monthly-trend?year=2026&month=10")
 
     assert response.status_code == 401
+
+
+def test_monthly_spending_comparison_includes_category_changes(client, db_session):
+    register_and_login(
+        client,
+        "comparison@example.com",
+        "Comparison User",
+    )
+    user = db_session.query(User).filter(User.email == "comparison@example.com").one()
+    food = Category(user_id=None, name="Food", type="expense")
+    transport = Category(user_id=None, name="Transport", type="expense")
+    db_session.add_all([food, transport])
+    db_session.commit()
+    db_session.add_all(
+        [
+            Transaction(
+                user_id=user.id,
+                category_id=food.id,
+                type="expense",
+                amount="100.00",
+                transaction_date=date(2026, 9, 10),
+            ),
+            Transaction(
+                user_id=user.id,
+                category_id=food.id,
+                type="expense",
+                amount="150.00",
+                transaction_date=date(2026, 10, 10),
+            ),
+            Transaction(
+                user_id=user.id,
+                category_id=transport.id,
+                type="expense",
+                amount="50.00",
+                transaction_date=date(2026, 10, 12),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/analytics/monthly-comparison?year=2026&month=10"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "year": 2026,
+        "month": 10,
+        "previous_year": 2026,
+        "previous_month": 9,
+        "current_expenses": "200.00",
+        "previous_expenses": "100.00",
+        "absolute_change": "100.00",
+        "percentage_change": "100.00",
+        "categories": [
+            {
+                "category_id": food.id,
+                "category_name": "Food",
+                "current_expenses": "150.00",
+                "previous_expenses": "100.00",
+                "absolute_change": "50.00",
+                "percentage_change": "50.00",
+            },
+            {
+                "category_id": transport.id,
+                "category_name": "Transport",
+                "current_expenses": "50.00",
+                "previous_expenses": "0.00",
+                "absolute_change": "50.00",
+                "percentage_change": None,
+            },
+        ],
+    }
+
+
+def test_monthly_spending_comparison_returns_null_percentage_without_baseline(client):
+    register_and_login(
+        client,
+        "comparison-empty@example.com",
+        "Comparison Empty",
+    )
+
+    response = client.get(
+        "/api/v1/analytics/monthly-comparison?year=2026&month=10"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_expenses"] == "0.00"
+    assert response.json()["previous_expenses"] == "0.00"
+    assert response.json()["absolute_change"] == "0.00"
+    assert response.json()["percentage_change"] is None
+    assert response.json()["categories"] == []

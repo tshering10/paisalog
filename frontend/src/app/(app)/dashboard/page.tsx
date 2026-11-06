@@ -7,6 +7,7 @@ import { getBudgets } from "@/lib/budgets-api";
 import {
   getExpensesByCategory,
   getMonthlySummary,
+  getMonthlyComparison,
   getMonthlyTrend,
   getRecentTransactions,
 } from "@/lib/analytics-api";
@@ -42,10 +43,11 @@ export default async function DashboardPage({
 }: DashboardPageProps) {
   await io();
   const { year, month } = parseMonth((await searchParams).month);
-  const [summary, expenses, trend, recentTransactions, categories, budgets] = await Promise.all([
+  const [summary, expenses, trend, comparison, recentTransactions, categories, budgets] = await Promise.all([
     getMonthlySummary(year, month),
     getExpensesByCategory(year, month),
     getMonthlyTrend(year, month),
+    getMonthlyComparison(year, month),
     getRecentTransactions(),
     getCategories(),
     getBudgets(year, month),
@@ -112,6 +114,11 @@ export default async function DashboardPage({
         <div className="grid grid-cols-2 gap-5 lg:grid-cols-1">
           <MetricCard label="Income" value={formatMoney(summary.income)} tone="income" />
           <MetricCard label="Expenses" value={formatMoney(summary.expenses)} tone="expense" />
+          <MetricCard
+            label="Average daily spending"
+            value={formatMoney(summary.average_daily_expenses)}
+            tone="expense"
+          />
         </div>
       </div>
 
@@ -161,6 +168,58 @@ export default async function DashboardPage({
         )}
       </section>
 
+      <section className="mt-5 rounded-card bg-surface p-6 shadow-card">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <h2 className="font-heading text-lg font-bold text-text">Monthly spending comparison</h2>
+            <p className="mt-1 text-sm text-text-muted">
+              Compared with {formatMonth(comparison.previous_year, comparison.previous_month)}.
+            </p>
+          </div>
+            <div className="text-left sm:text-right">
+              <p className={`money font-heading text-xl font-bold ${comparisonChangeTone(comparison.absolute_change)}`}>
+                {formatChange(comparison.absolute_change)}
+            </p>
+            <p className="text-xs text-text-muted">
+              {comparison.percentage_change === null
+                ? "No previous spending"
+                  : `${formatChange(comparison.percentage_change)} change`}
+            </p>
+          </div>
+        </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <ComparisonMetric
+              label={formatMonth(year, month)}
+              value={formatMoney(comparison.current_expenses)}
+            />
+            <ComparisonMetric
+              label={formatMonth(comparison.previous_year, comparison.previous_month)}
+              value={formatMoney(comparison.previous_expenses)}
+            />
+          </div>
+          {comparison.categories.length > 0 && (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {comparison.categories.map((category) => (
+                <div className="border-t border-border pt-3 text-sm" key={category.category_id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-text">{category.category_name}</span>
+                    <span className={`money ${comparisonChangeTone(category.absolute_change)}`}>
+                      {formatChange(category.absolute_change)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-text-muted">
+                    {formatMoney(category.current_expenses)} this month vs{" "}
+                    {formatMoney(category.previous_expenses)} previous month
+                    {category.percentage_change === null
+                      ? ""
+                      : ` (${formatChange(category.percentage_change)})`}
+                  </p>
+                </div>
+              ))}
+            </div>
+        )}
+      </section>
+
       <RecentTransactions transactions={recentTransactions.items} />
     </div>
   );
@@ -186,5 +245,23 @@ function MetricCard({
         {value}
       </p>
     </section>
+  );
+}
+
+function formatChange(value: string): string {
+  const amount = Number(value);
+  return `${amount > 0 ? "+" : ""}${formatMoney(value)}`;
+}
+
+function comparisonChangeTone(value: string): string {
+  return Number(value) > 0 ? "text-expense-strong" : "text-income-strong";
+}
+
+function ComparisonMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-control bg-background px-4 py-3">
+      <p className="text-xs text-text-muted">{label}</p>
+      <p className="money mt-1 font-heading text-lg font-bold text-text">{value}</p>
+    </div>
   );
 }

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.models.category import Category
 from app.models.transaction import Transaction
 
-
 MONEY_QUANTUM = Decimal("0.01")
 
 
@@ -17,6 +16,18 @@ class InvalidAnalyticsPeriodError(Exception):
 
 class InvalidAnalyticsRangeError(Exception):
     """Raised when the requested trend range is invalid."""
+
+
+def _previous_month(year: int, month: int) -> tuple[int, int]:
+    return (year - 1, 12) if month == 1 else (year, month - 1)
+
+
+def _percentage_change(current: Decimal, previous: Decimal) -> Decimal | None:
+    if not previous:
+        return None
+    return ((current - previous) / previous * Decimal(100)).quantize(
+        MONEY_QUANTUM
+    )
 
 
 def get_month_range(year: int, month: int) -> tuple[date, date]:
@@ -67,6 +78,8 @@ def get_monthly_summary(
     income = Decimal(income or 0).quantize(MONEY_QUANTUM)
     expenses = Decimal(expenses or 0).quantize(MONEY_QUANTUM)
     net = (income - expenses).quantize(MONEY_QUANTUM)
+    calendar_days = (end_date - start_date).days
+    average_daily_expenses = (expenses / calendar_days).quantize(MONEY_QUANTUM)
 
     return {
         "year": year,
@@ -75,6 +88,7 @@ def get_monthly_summary(
         "expenses": expenses,
         "net": net,
         "transaction_count": transaction_count,
+        "average_daily_expenses": average_daily_expenses,
     }
 
 
@@ -112,7 +126,7 @@ def get_expenses_by_category(
     for row in rows:
         amount = Decimal(row.amount or 0).quantize(MONEY_QUANTUM)
         percentage = (
-            (amount / total_expenses * Decimal("100"))
+            (amount / total_expenses * Decimal(100))
             if total_expenses
             else Decimal("0.00")
         ).quantize(MONEY_QUANTUM)
@@ -167,31 +181,30 @@ def get_monthly_trend(
         (Transaction.type == "expense", Transaction.amount),
         else_=Decimal("0.00"),
     )
-    statement = select(
-        func.extract("year", Transaction.transaction_date).label("year"),
-        func.extract("month", Transaction.transaction_date).label("month"),
-        func.sum(income_expression).label("income"),
-        func.sum(expense_expression).label("expenses"),
-    ).where(
-        Transaction.user_id == user_id,
-        Transaction.transaction_date >= start_date,
-        Transaction.transaction_date < end_date,
-    ).group_by(
-        func.extract("year", Transaction.transaction_date),
-        func.extract("month", Transaction.transaction_date),
+    statement = (
+        select(
+            func.extract("year", Transaction.transaction_date).label("year"),
+            func.extract("month", Transaction.transaction_date).label("month"),
+            func.sum(income_expression).label("income"),
+            func.sum(expense_expression).label("expenses"),
+        )
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date,
+        )
+        .group_by(
+            func.extract("year", Transaction.transaction_date),
+            func.extract("month", Transaction.transaction_date),
+        )
     )
-    rows = {
-        (int(row.year), int(row.month)): row
-        for row in db.execute(statement).all()
-    }
+    rows = {(int(row.year), int(row.month)): row for row in db.execute(statement).all()}
 
     trend = []
     for trend_year, trend_month in reversed(requested_months):
         row = rows.get((trend_year, trend_month))
         income = Decimal(row.income if row else 0).quantize(MONEY_QUANTUM)
-        expenses = Decimal(row.expenses if row else 0).quantize(
-            MONEY_QUANTUM
-        )
+        expenses = Decimal(row.expenses if row else 0).quantize(MONEY_QUANTUM)
         trend.append(
             {
                 "year": trend_year,
@@ -203,3 +216,99 @@ def get_monthly_trend(
         )
 
     return {"months": trend}
+
+
+def get_monthly_spending_comparison(
+    db: Session,
+    *,
+    user_id: int,
+    year: int,
+    month: int,
+) -> dict:
+    _, current_end = get_month_range(year, month)
+    previous_year, previous_month = _previous_month(year, month)
+    previous_start, _ = get_month_range(previous_year, previous_month)
+
+    statement = (
+        select(
+            Category.id,
+            Category.name,
+            func.extract("year", Transaction.transaction_date).label("year"),
+            func.extract("month", Transaction.transaction_date).label("month"),
+            func.sum(Transaction.amount).label("amount"),
+        )
+        .join(Transaction, Transaction.category_id == Category.id)
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.type == "expense",
+            Transaction.transaction_date >= previous_start,
+            Transaction.transaction_date < current_end,
+        )
+        .group_by(
+            Category.id,
+            Category.name,
+            func.extract("year", Transaction.transaction_date),
+            func.extract("month", Transaction.transaction_date),
+        )
+    )
+
+    rows = db.execute(statement).all()
+    spending: dict[tuple[int, int, int], Decimal] = {
+        (row.id, int(row.year), int(row.month)): Decimal(row.amount).quantize(
+            MONEY_QUANTUM
+        )
+        for row in rows
+    }
+    category_names = {row.id: row.name for row in rows}
+    category_ids = {category_id for category_id, _, _ in spending}
+    categories = []
+    for category_id in sorted(category_ids):
+        current = spending.get((category_id, year, month), Decimal("0.00"))
+        previous = spending.get(
+            (category_id, previous_year, previous_month),
+            Decimal("0.00"),
+        )
+        categories.append(
+            {
+                "category_id": category_id,
+                "category_name": category_names[category_id],
+                "current_expenses": current,
+                "previous_expenses": previous,
+                "absolute_change": (current - previous).quantize(MONEY_QUANTUM),
+                "percentage_change": _percentage_change(current, previous),
+            }
+        )
+
+    current_expenses = sum(
+        (
+            amount
+            for (category_id, row_year, row_month), amount in spending.items()
+            if row_year == year and row_month == month
+        ),
+        Decimal("0.00"),
+    ).quantize(MONEY_QUANTUM)
+    previous_expenses = sum(
+        (
+            amount
+            for (category_id, row_year, row_month), amount in spending.items()
+            if row_year == previous_year and row_month == previous_month
+        ),
+        Decimal("0.00"),
+    ).quantize(MONEY_QUANTUM)
+
+    return {
+        "year": year,
+        "month": month,
+        "previous_year": previous_year,
+        "previous_month": previous_month,
+        "current_expenses": current_expenses,
+        "previous_expenses": previous_expenses,
+        "absolute_change": (current_expenses - previous_expenses).quantize(
+            MONEY_QUANTUM
+        ),
+        "percentage_change": _percentage_change(
+            current_expenses,
+            previous_expenses,
+        ),
+        "categories": categories,
+    }
