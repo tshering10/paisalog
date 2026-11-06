@@ -107,6 +107,7 @@ DB_POOL_SIZE=10
 DB_MAX_OVERFLOW=20
 DB_POOL_TIMEOUT=30
 DB_POOL_RECYCLE=1800
+METRICS_API_KEY=
 CORS_ORIGINS=http://localhost:3000
 FRONTEND_URL=http://localhost:3000
 
@@ -291,6 +292,21 @@ pnpm lint
 ## API Endpoints
 
 All endpoints use the `/api/v1` prefix.
+
+Every API response includes an `X-Request-ID` header. Clients may send a valid request ID to correlate related requests; otherwise the API generates one.
+Application logs record the request ID, method, path, status, and duration in JSON format. Passwords, tokens, cookies, request bodies, and financial details
+are intentionally excluded from request logs.
+Unexpected server errors are logged with their stack trace and request ID while the API returns only a generic error message and correlation ID.
+
+Health endpoints:
+
+- `GET /api/v1/health/live` checks that the API process is running.
+- `GET /api/v1/health/ready` checks database readiness and returns a safe status.
+
+When `METRICS_API_KEY` is configured, `GET /api/v1/metrics` with the `X-Metrics-Key` header returns route-level request counts and latency summaries.
+Metrics are disabled when the key is empty.
+
+The API also logs privacy-safe warnings for repeated failed logins, repeated unauthorized responses, and unusually frequent CSV exports. Detection counters are in-memory and store only hashed subjects; multi-instance deployments should move these counters to a shared store such as Redis.
 
 ### Authentication & Account
 

@@ -10,6 +10,7 @@ from app.api.dependencies import (
     VerifiedCurrentUser,
 )
 from app.core.config import get_settings
+from app.core.observability import log_security_event
 from app.core.security import create_access_token, decode_access_token
 from app.models.session import UserSession
 from app.models.user import User
@@ -181,11 +182,23 @@ def login(
             password=login_data.password,
         )
     except AccountDeactivatedError:
+        log_security_event(
+            "login_failed",
+            email=str(login_data.email),
+            reason="account_deactivated",
+            request=request,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account is temporarily deactivated",
         ) from None
     except InvalidCredentialsError:
+        log_security_event(
+            "login_failed",
+            email=str(login_data.email),
+            reason="invalid_credentials",
+            request=request,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -197,6 +210,11 @@ def login(
         expires_minutes=get_settings().access_token_expire_minutes,
         user_agent=request.headers.get("user-agent"),
         ip_address=request.client.host if request.client else None,
+    )
+    log_security_event(
+        "login_succeeded",
+        user_id=user.id,
+        request=request,
     )
     set_auth_cookie(response, user.id, user.token_version, session.id)
     return UserRead.model_validate(user)
