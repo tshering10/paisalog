@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # parents[3] points to the Paisalog project root.
@@ -11,6 +11,10 @@ ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 class Settings(BaseSettings):
     app_name: str = "PaisaLog API"
     app_version: str = "0.1.0"
+    environment: str = Field(
+        default="development",
+        validation_alias="ENVIRONMENT",
+    )
 
     database_url: str = Field(..., validation_alias="DATABASE_URL")
     test_database_url: str | None = Field(
@@ -20,7 +24,7 @@ class Settings(BaseSettings):
     secret_key: str = Field(..., validation_alias="SECRET_KEY")
 
     cookie_secure: bool = Field(
-        default=False,
+        default=True,
         validation_alias="COOKIE_SECURE",
     )
     cookie_samesite: str = Field(
@@ -96,6 +100,13 @@ class Settings(BaseSettings):
         default="noreply@paisalog.local",
         validation_alias="EMAIL_FROM",
     )
+
+    @model_validator(mode="after")
+    def validate_cookie_security(self) -> "Settings":
+        if self.environment.lower() == "production" and not self.cookie_secure:
+            raise ValueError("COOKIE_SECURE must be true in production")
+        return self
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

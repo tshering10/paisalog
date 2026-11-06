@@ -20,6 +20,14 @@ class InvalidTransactionFilterError(Exception):
     """Raised when transaction list filters are inconsistent."""
 
 
+def sanitize_csv_cell(value: str | None) -> str:
+    if not value:
+        return ""
+    if value.lstrip().startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
 def _get_visible_category(
     db: Session,
     *,

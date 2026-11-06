@@ -99,10 +99,16 @@ The root `.env` must include:
 DATABASE_URL=postgresql+psycopg://paisalog:paisalog@localhost:5432/paisalog
 TEST_DATABASE_URL=postgresql+psycopg://paisalog:paisalog@localhost:5432/paisalog_test
 SECRET_KEY=replace-with-a-long-random-secret
+# Use false only for local HTTP development. Production requires true.
+ENVIRONMENT=development
 COOKIE_SECURE=false
 COOKIE_SAMESITE=lax
 CORS_ORIGINS=http://localhost:3000
 FRONTEND_URL=http://localhost:3000
+
+For production, set `ENVIRONMENT=production`, use HTTPS, and set
+`COOKIE_SECURE=true`. The API refuses to start in production when secure
+cookies are disabled.
 
 # SMTP (Mailpit handles this automatically when using Docker)
 # Use "mailpit" with Docker Compose; use "localhost" when running the API on the host.

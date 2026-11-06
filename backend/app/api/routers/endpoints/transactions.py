@@ -24,6 +24,7 @@ from app.services.transactions import (
     export_transactions,
     get_transaction,
     list_transactions,
+    sanitize_csv_cell,
     update_transaction,
 )
 
@@ -154,9 +155,9 @@ def export_transactions_endpoint(
                 [
                     transaction.transaction_date.isoformat(),
                     transaction.type,
-                    transaction.category.name,
+                    sanitize_csv_cell(transaction.category.name),
                     f"{transaction.amount:.2f}",
-                    transaction.description or "",
+                    sanitize_csv_cell(transaction.description),
                 ]
             )
             yield output.getvalue()

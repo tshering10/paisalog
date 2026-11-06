@@ -1,6 +1,9 @@
 from datetime import date, timedelta
 
+import pytest
+
 from app.models.category import Category
+from app.services.transactions import sanitize_csv_cell
 from tests.helpers import verify_registered_user
 
 
@@ -425,6 +428,24 @@ def test_transaction_csv_export_rejects_reversed_date_range(client):
     assert response.status_code == 422
 
 
+def test_transaction_csv_export_neutralizes_spreadsheet_formulas(client):
+    register_and_login(client, "export-formula@example.com", "Export Formula")
+    category = create_category(client, "=Unsafe category")
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            category["id"],
+            description=" \t+SUM(A1:A2)",
+        ),
+    )
+
+    response = client.get("/api/v1/transactions/export.csv")
+
+    assert response.status_code == 200
+    assert "'=Unsafe category" in response.text
+    assert "' \t+SUM(A1:A2)" in response.text
+
+
 def test_transaction_csv_export_requires_email_verification(client):
     client.post(
         "/api/v1/auth/register",
@@ -445,3 +466,16 @@ def test_transaction_csv_export_requires_email_verification(client):
     response = client.get("/api/v1/transactions/export.csv")
 
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize("prefix", ["=", "+", "-", "@"])
+@pytest.mark.parametrize("whitespace", ["", " ", "\t"])
+def test_sanitize_csv_cell_neutralizes_formula_prefixes(prefix, whitespace):
+    value = f"{whitespace}{prefix}SUM(A1:A2)"
+
+    assert sanitize_csv_cell(value) == f"'{value}"
+
+
+@pytest.mark.parametrize("value", [None, "", "normal text", "123", " report"])
+def test_sanitize_csv_cell_preserves_safe_values(value):
+    assert sanitize_csv_cell(value) == (value or "")
