@@ -124,6 +124,39 @@ def list_transactions(
     return list(db.scalars(statement).all()), total
 
 
+def export_transactions(
+    db: Session,
+    *,
+    user_id: int,
+    transaction_type: str | None = None,
+    category_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[Transaction]:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise InvalidTransactionFilterError
+
+    statement = (
+        select(Transaction)
+        .options(selectinload(Transaction.category))
+        .where(Transaction.user_id == user_id)
+    )
+    if transaction_type is not None:
+        statement = statement.where(Transaction.type == transaction_type)
+    if category_id is not None:
+        statement = statement.where(Transaction.category_id == category_id)
+    if date_from is not None:
+        statement = statement.where(Transaction.transaction_date >= date_from)
+    if date_to is not None:
+        statement = statement.where(Transaction.transaction_date <= date_to)
+
+    statement = statement.order_by(
+        Transaction.transaction_date.asc(),
+        Transaction.id.asc(),
+    )
+    return list(db.scalars(statement).all())
+
+
 def update_transaction(
     db: Session,
     *,

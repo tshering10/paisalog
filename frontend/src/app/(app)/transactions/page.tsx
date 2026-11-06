@@ -6,6 +6,7 @@ import { TransactionFormModal } from "@/components/transactions/transaction-form
 import { DeleteTransactionButton } from "@/components/transactions/delete-transaction-button";
 import { formatMoney } from "@/lib/format";
 import { getTransactions } from "@/lib/transaction-api";
+import { ExportTransactionsButton } from "@/components/transactions/export-transactions-button";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -82,18 +83,21 @@ export default async function TransactionsPage({
           <h1 className="mt-1 font-heading text-3xl font-bold text-text">Transactions</h1>
           <p className="mt-2 text-sm text-text-muted">Review and filter your income and expenses.</p>
         </div>
-        <TransactionFormModal
-          categories={categories}
-          trigger={
-            <button
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white shadow-hero transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              type="button"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Add transaction
-            </button>
-          }
-        />
+        <div className="flex flex-wrap gap-3">
+          <ExportTransactionsButton categories={categories} />
+          <TransactionFormModal
+            categories={categories}
+            trigger={
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white shadow-hero transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                type="button"
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                Add transaction
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <form className="mt-8 rounded-card bg-surface p-5 shadow-card" method="get">

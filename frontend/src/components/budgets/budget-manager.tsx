@@ -228,7 +228,7 @@ function BudgetCard({
       <div className="mt-3 flex justify-between gap-3 text-sm">
         <span className="money text-text">{formatMoney(budget.spent)} spent</span>
         <span className={`money font-semibold ${budget.is_exceeded ? "text-expense-strong" : "text-text-muted"}`}>
-          {budget.is_exceeded ? `${formatMoney(Math.abs(budget.remaining))} over` : `${formatMoney(budget.remaining)} left`}
+          {budget.is_exceeded ? `${formatMoney(String(Math.abs(Number(budget.remaining))))} over` : `${formatMoney(budget.remaining)} left`}
         </span>
       </div>
       {budget.alert_threshold !== null && (

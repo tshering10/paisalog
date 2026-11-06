@@ -374,3 +374,74 @@ def test_transaction_list_page_past_last_page_is_empty(client):
     assert body["total"] == 1
     assert body["page"] == 2
     assert body["page_size"] == 1
+
+
+def test_user_can_export_filtered_transactions_as_csv(client):
+    register_and_login(client, "export@example.com", "Export User")
+    food = create_category(client, "Food")
+    transport = create_category(client, "Transport")
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            food["id"],
+            amount="12.50",
+            transaction_date="2026-10-10",
+            description='Lunch, "downtown"',
+        ),
+    )
+    client.post(
+        "/api/v1/transactions",
+        json=transaction_payload(
+            transport["id"],
+            amount="20.00",
+            transaction_date="2026-10-20",
+        ),
+    )
+
+    response = client.get(
+        "/api/v1/transactions/export.csv"
+        f"?category_id={food['id']}&date_from=2026-10-10&date_to=2026-10-10"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="transactions.csv"'
+    )
+    assert response.text == (
+        "date,type,category,amount,description\r\n"
+        '2026-10-10,expense,Food,12.50,"Lunch, ""downtown"""\r\n'
+    )
+
+
+def test_transaction_csv_export_rejects_reversed_date_range(client):
+    register_and_login(client, "export-invalid@example.com", "Export Invalid")
+
+    response = client.get(
+        "/api/v1/transactions/export.csv"
+        "?date_from=2026-10-21&date_to=2026-10-20"
+    )
+
+    assert response.status_code == 422
+
+
+def test_transaction_csv_export_requires_email_verification(client):
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "export-unverified@example.com",
+            "password": "password123",
+            "full_name": "Export Unverified",
+        },
+    )
+    client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "export-unverified@example.com",
+            "password": "password123",
+        },
+    )
+
+    response = client.get("/api/v1/transactions/export.csv")
+
+    assert response.status_code == 403

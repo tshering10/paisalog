@@ -1,7 +1,11 @@
+import csv
+import io
+from collections.abc import Iterator
 from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import DbSession, VerifiedCurrentUser
 from app.schemas.common import Page
@@ -17,6 +21,7 @@ from app.services.transactions import (
     TransactionNotFoundError,
     create_transaction,
     delete_transaction,
+    export_transactions,
     get_transaction,
     list_transactions,
     update_transaction,
@@ -102,6 +107,69 @@ def list_transaction_endpoint(
         total=total,
         page=page,
         page_size=page_size,
+    )
+
+
+@router.get(
+    "/export.csv",
+    response_class=StreamingResponse,
+    summary="Export the user's filtered transactions as CSV",
+)
+def export_transactions_endpoint(
+    current_user: VerifiedCurrentUser,
+    db: DbSession,
+    transaction_type: Annotated[
+        TransactionType | None,
+        Query(alias="type"),
+    ] = None,
+    category_id: Annotated[int | None, Query(gt=0)] = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> StreamingResponse:
+    try:
+        transactions = export_transactions(
+            db,
+            user_id=current_user.id,
+            transaction_type=transaction_type,
+            category_id=category_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except InvalidTransactionFilterError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from must be earlier than or equal to date_to",
+        ) from None
+
+    def csv_rows() -> Iterator[str]:
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(["date", "type", "category", "amount", "description"])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        for transaction in transactions:
+            writer.writerow(
+                [
+                    transaction.transaction_date.isoformat(),
+                    transaction.type,
+                    transaction.category.name,
+                    f"{transaction.amount:.2f}",
+                    transaction.description or "",
+                ]
+            )
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    filename = "transactions.csv"
+    return StreamingResponse(
+        csv_rows(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
 
 

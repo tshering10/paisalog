@@ -345,7 +345,12 @@ GET    /api/v1/transactions             ?type, category_id, date_from, date_to, 
 GET    /api/v1/transactions/{id}
 PATCH  /api/v1/transactions/{id}
 DELETE /api/v1/transactions/{id}
+GET    /api/v1/transactions/export.csv    ?type, category_id, date_from, date_to
 ```
+
+The CSV export includes `date`, `type`, `category`, `amount`, and `description`
+columns. Results are limited to the authenticated user and sorted by date from
+oldest to newest. Date filters are inclusive.
 
 ### Analytics  *(requires verified account)*
 
