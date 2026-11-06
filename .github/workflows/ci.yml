@@ -37,6 +37,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/paisalog_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/paisalog_test
       SECRET_KEY: ci-test-secret-key-not-for-production
+      # Tests use FastAPI's HTTP TestClient; production must use secure cookies.
+      COOKIE_SECURE: "false"
 
     steps:
       - name: Checkout code

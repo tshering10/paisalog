@@ -21,6 +21,7 @@ export type TransactionFilters = {
   date_to?: string;
   page?: number;
   page_size?: number;
+  cursor?: string;
 };
 
 export type TransactionPage = {
@@ -28,6 +29,7 @@ export type TransactionPage = {
   total: number;
   page: number;
   page_size: number;
+  next_cursor: string | null;
 };
 
 export function getTransactions(
@@ -39,6 +41,7 @@ export function getTransactions(
   if (filters.category_id) query.set("category_id", filters.category_id);
   if (filters.date_from) query.set("date_from", filters.date_from);
   if (filters.date_to) query.set("date_to", filters.date_to);
+  if (filters.cursor) query.set("cursor", filters.cursor);
   query.set("page", String(filters.page ?? 1));
   query.set("page_size", String(filters.page_size ?? 10));
 

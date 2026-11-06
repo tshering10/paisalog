@@ -86,9 +86,10 @@ def list_transaction_endpoint(
     category_id: Annotated[int | None, Query(gt=0)] = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    cursor: str | None = None,
 ) -> Page[TransactionRead]:
     try:
-        transactions, total = list_transactions(
+        transactions, total, next_cursor = list_transactions(
             db,
             user_id=current_user.id,
             page=page,
@@ -97,6 +98,7 @@ def list_transaction_endpoint(
             category_id=category_id,
             date_from=date_from,
             date_to=date_to,
+            cursor=cursor,
         )
     except InvalidTransactionFilterError:
         raise HTTPException(
@@ -108,6 +110,7 @@ def list_transaction_endpoint(
         total=total,
         page=page,
         page_size=page_size,
+        next_cursor=next_cursor,
     )
 
 

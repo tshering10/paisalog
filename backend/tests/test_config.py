@@ -4,7 +4,8 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 
-def test_cookie_security_defaults_to_secure():
+def test_cookie_security_defaults_to_secure(monkeypatch):
+    monkeypatch.delenv("COOKIE_SECURE", raising=False)
     settings = Settings(
         DATABASE_URL="postgresql://localhost/paisalog",
         SECRET_KEY="test-secret",

@@ -35,6 +35,10 @@ class Settings(BaseSettings):
         default_factory=list,
         validation_alias="CORS_ORIGINS",
     )
+    db_pool_size: int = Field(default=10, validation_alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=20, validation_alias="DB_MAX_OVERFLOW")
+    db_pool_timeout: int = Field(default=30, validation_alias="DB_POOL_TIMEOUT")
+    db_pool_recycle: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE")
     access_token_expire_minutes: int = Field(
         default=1440,
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",

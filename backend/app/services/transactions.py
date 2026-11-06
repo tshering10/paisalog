@@ -1,3 +1,5 @@
+import base64
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 
@@ -18,6 +20,20 @@ class TransactionNotFoundError(Exception):
 
 class InvalidTransactionFilterError(Exception):
     """Raised when transaction list filters are inconsistent."""
+
+
+def _decode_cursor(cursor: str) -> tuple[date, int]:
+    try:
+        decoded = base64.urlsafe_b64decode(cursor.encode()).decode()
+        transaction_date, transaction_id = decoded.split(":", 1)
+        return date.fromisoformat(transaction_date), int(transaction_id)
+    except (ValueError, UnicodeDecodeError):
+        raise InvalidTransactionFilterError from None
+
+
+def _encode_cursor(transaction: Transaction) -> str:
+    value = f"{transaction.transaction_date.isoformat()}:{transaction.id}"
+    return base64.urlsafe_b64encode(value.encode()).decode()
 
 
 def sanitize_csv_cell(value: str | None) -> str:
@@ -109,7 +125,8 @@ def list_transactions(
     category_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-) -> tuple[list[Transaction], int]:
+    cursor: str | None = None,
+) -> tuple[list[Transaction], int, str | None]:
     base_query = select(Transaction).where(Transaction.user_id == user_id)
     if date_from is not None and date_to is not None and date_from > date_to:
         raise InvalidTransactionFilterError
@@ -121,15 +138,26 @@ def list_transactions(
         base_query = base_query.where(Transaction.transaction_date >= date_from)
     if date_to is not None:
         base_query = base_query.where(Transaction.transaction_date <= date_to)
+    if cursor is not None:
+        cursor_date, cursor_id = _decode_cursor(cursor)
+        base_query = base_query.where(
+            (Transaction.transaction_date < cursor_date)
+            | (
+                (Transaction.transaction_date == cursor_date)
+                & (Transaction.id < cursor_id)
+            )
+        )
 
     total = db.scalar(select(func.count()).select_from(base_query.subquery())) or 0
     statement = (
         base_query.options(selectinload(Transaction.category))
         .order_by(Transaction.transaction_date.desc(), Transaction.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        .offset(0 if cursor is not None else (page - 1) * page_size)
+        .limit(page_size + 1 if cursor is not None else page_size)
     )
-    return list(db.scalars(statement).all()), total
+    items = list(db.scalars(statement).all())
+    next_cursor = _encode_cursor(items[page_size - 1]) if cursor and len(items) > page_size else None
+    return items[:page_size], total, next_cursor
 
 
 def export_transactions(
@@ -140,7 +168,7 @@ def export_transactions(
     category_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-) -> list[Transaction]:
+) -> Iterator[Transaction]:
     if date_from is not None and date_to is not None and date_from > date_to:
         raise InvalidTransactionFilterError
 
@@ -162,7 +190,7 @@ def export_transactions(
         Transaction.transaction_date.asc(),
         Transaction.id.asc(),
     )
-    return list(db.scalars(statement).all())
+    return iter(db.scalars(statement).yield_per(500))
 
 
 def update_transaction(

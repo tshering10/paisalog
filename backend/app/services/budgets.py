@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.budget import MonthlyBudget
 from app.models.category import Category
 from app.models.transaction import Transaction
+from app.services.analytics import get_month_range
 
 MONEY_QUANTUM = Decimal("0.01")
 ALERT_THRESHOLDS = (80, 90, 99, 100)
@@ -69,8 +70,6 @@ def _usage(
     month: int,
     category_id: int | None,
 ) -> Decimal:
-    from app.services.analytics import get_month_range
-
     start_date, end_date = get_month_range(year, month)
     statement = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
         Transaction.user_id == user_id,
@@ -83,14 +82,19 @@ def _usage(
     return Decimal(db.scalar(statement) or 0).quantize(MONEY_QUANTUM)
 
 
-def _serialize_budget(db: Session, budget: MonthlyBudget) -> dict:
-    spent = _usage(
-        db,
-        user_id=budget.user_id,
-        year=budget.year,
-        month=budget.month,
-        category_id=budget.category_id,
-    )
+def _serialize_budget(
+    db: Session,
+    budget: MonthlyBudget,
+    spent: Decimal | None = None,
+) -> dict:
+    if spent is None:
+        spent = _usage(
+            db,
+            user_id=budget.user_id,
+            year=budget.year,
+            month=budget.month,
+            category_id=budget.category_id,
+        )
     percentage = (spent / budget.amount * Decimal(100)).quantize(MONEY_QUANTUM)
     alert_threshold = next(
         (
@@ -166,7 +170,36 @@ def list_budgets(
         )
         .order_by(MonthlyBudget.category_id.is_not(None), MonthlyBudget.category_id)
     ).all()
-    return [_serialize_budget(db, budget) for budget in budgets]
+    start_date, end_date = get_month_range(year, month)
+    spending_rows = db.execute(
+        select(
+            Transaction.category_id,
+            func.sum(Transaction.amount).label("spent"),
+        )
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.type == "expense",
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date,
+        )
+        .group_by(Transaction.category_id)
+    ).all()
+    spent_by_category = {
+        row.category_id: Decimal(row.spent).quantize(MONEY_QUANTUM)
+        for row in spending_rows
+    }
+    total_spent = sum(spent_by_category.values(), Decimal("0.00"))
+    return [
+        _serialize_budget(
+            db,
+            budget,
+            total_spent if budget.category_id is None else spent_by_category.get(
+                budget.category_id,
+                Decimal("0.00"),
+            ),
+        )
+        for budget in budgets
+    ]
 
 
 def update_budget(

@@ -1,13 +1,9 @@
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel
 
 
-ItemT = TypeVar("ItemT")
-
-
-class Page(BaseModel, Generic[ItemT]):
-    items: list[ItemT]
+class Page[T](BaseModel):
+    items: list[T]
     total: int
     page: int
     page_size: int
+    next_cursor: str | None = None
